@@ -11,6 +11,8 @@ pub struct Config {
     pub server_addr: String,
     pub latest_articles_count: usize,
     pub article_extension: String,
+    #[serde(default)]
+    pub enable_nested_categories: bool,
 }
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {

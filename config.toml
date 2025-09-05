@@ -3,3 +3,4 @@ log_level = "scribe=debug,tower_http=debug"
 server_addr = "127.0.0.1:3000"
 latest_articles_count = 10
 article_extension = "md"
+enable_nested_categories = true

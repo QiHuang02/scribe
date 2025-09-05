@@ -13,7 +13,7 @@ pub struct AppState {
 }
 
 pub async fn create_app_state(config: &Arc<Config>) -> Arc<AppState> {
-    let article_store = match ArticleStore::new(&config.article_dir, &config.article_extension) {
+    let article_store = match ArticleStore::new(&config.article_dir, &config.article_extension, config.enable_nested_categories) {
         Ok(store) => store,
         Err(e) => {
             eprintln!("Failed to load articles: {:?}", e);
@@ -35,6 +35,7 @@ pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
     let app = Router::new()
         .merge(crate::handlers::articles::create_router())
         .merge(crate::handlers::tags::create_router())
+        .merge(crate::handlers::categories::create_router())
         .with_state(app_state);
 
     let addr: SocketAddr = config.server_addr.parse().expect("Invalid server address");
@@ -67,7 +68,7 @@ async fn watch_articles(state: Arc<AppState>) {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         info!("File change detected, reloading articles...");
-        match ArticleStore::new(&state.config.article_dir, &state.config.article_extension) {
+        match ArticleStore::new(&state.config.article_dir, &state.config.article_extension, state.config.enable_nested_categories) {
             Ok(new_store) => {
                 let mut store_guard = state.store.write().unwrap();
                 *store_guard = new_store;

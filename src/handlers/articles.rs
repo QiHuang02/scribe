@@ -11,6 +11,7 @@ use std::sync::Arc;
 #[derive(Deserialize, Debug)]
 pub struct ArticleParams {
     tag: Option<String>,
+    category: Option<String>,
     q: Option<String>,
     include_content: Option<bool>,
     #[serde(default = "default_page")]
@@ -43,6 +44,11 @@ async fn get_articles_list(
         let mut articles = store.query(|article| !article.metadata.draft);
         if let Some(tag) = &params.tag {
             articles.retain(|a| a.metadata.tags.contains(tag));
+        }
+        if let Some(category) = &params.category {
+            articles.retain(|a| {
+                a.metadata.category.as_ref().map_or(false, |cat| cat == category)
+            });
         }
         if let Some(query) = &params.q {
             let query_lower = query.to_lowercase();
