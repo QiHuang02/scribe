@@ -1,4 +1,3 @@
-// article.rs
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -26,4 +25,18 @@ pub struct Article {
 pub struct ArticleTeaser {
     pub slug: String,
     pub metadata: Metadata,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum ArticleRepresentation {
+    Full(Article),
+    Teaser(ArticleTeaser),
+}
+
+#[derive(Serialize, Debug)]
+pub struct PaginatedArticles<T> {
+    pub articles: Vec<T>,
+    pub total_pages: usize,
+    pub current_page: usize,
 }

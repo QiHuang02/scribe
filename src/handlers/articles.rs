@@ -1,8 +1,8 @@
 use crate::error::AppError;
-use crate::models::article::ArticleTeaser;
+use crate::models::article::{ArticleRepresentation, ArticleTeaser, PaginatedArticles};
 use crate::AppState;
 use axum::extract::{Path, Query, State};
-use axum::response::{IntoResponse, Response};
+use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Deserialize;
@@ -13,6 +13,18 @@ pub struct ArticleParams {
     tag: Option<String>,
     q: Option<String>,
     include_content: Option<bool>,
+    #[serde(default = "default_page")]
+    page: usize,
+    #[serde(default = "default_limit")]
+    limit: usize,
+}
+
+fn default_page() -> usize {
+    1
+}
+
+fn default_limit() -> usize {
+    10
 }
 
 pub fn create_router() -> Router<Arc<AppState>> {
@@ -24,40 +36,57 @@ pub fn create_router() -> Router<Arc<AppState>> {
 async fn get_articles_list(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ArticleParams>,
-) -> Response {
+) -> impl IntoResponse {
     let store = state.store.read().unwrap();
 
-    let mut articles = match params.tag {
-        Some(tag) => store.query(|article| {
-            !article.metadata.draft && article.metadata.tags.contains(&tag)
-        }),
-        None => store.get_latest(state.config.latest_articles_count)
-            .into_iter()
-            .filter(|article| !article.metadata.draft)
-            .collect(),
+    let all_matching_articles = {
+        let mut articles = store.query(|article| !article.metadata.draft);
+        if let Some(tag) = &params.tag {
+            articles.retain(|a| a.metadata.tags.contains(tag));
+        }
+        if let Some(query) = &params.q {
+            let query_lower = query.to_lowercase();
+            articles.retain(|a| {
+                a.metadata.title.to_lowercase().contains(&query_lower)
+                    || a.metadata.description.to_lowercase().contains(&query_lower)
+                    // Note: Searching in content might be slow depending on the size of the articles
+                    || a.content.to_lowercase().contains(&query_lower)
+            });
+        }
+        articles
     };
 
-    if let Some(query) = params.q {
-        let query_lower = query.to_lowercase();
-        articles.retain(|article| {
-            article.metadata.title.to_lowercase().contains(&query_lower)
-                || article.metadata.description.to_lowercase().contains(&query_lower)
-                || article.content.to_lowercase().contains(&query_lower)
-        });
-    }
+    let total_articles = all_matching_articles.len();
+    let limit = if params.limit > 0 { params.limit } else { 10 };
+    let total_pages = (total_articles as f64 / limit as f64).ceil() as usize;
+    let page = if params.page > 0 { params.page } else { 1 };
+    let skip = (page - 1) * limit;
+
+    let paginated_articles = all_matching_articles.into_iter().skip(skip).take(limit);
 
     if params.include_content.unwrap_or(false) {
-        let articles_with_content: Vec<_> = articles.iter().map(|&article| article.clone()).collect();
-        Json(articles_with_content).into_response()
+        let articles_with_content = paginated_articles
+            .map(|article| ArticleRepresentation::Full(article.clone()))
+            .collect::<Vec<_>>();
+        Json(PaginatedArticles {
+            articles: articles_with_content,
+            total_pages,
+            current_page: page,
+        })
     } else {
-        let teasers = articles
-            .iter()
-            .map(|article| ArticleTeaser {
-                slug: article.slug.clone(),
-                metadata: article.metadata.clone(),
+        let teasers = paginated_articles
+            .map(|article| {
+                ArticleRepresentation::Teaser(ArticleTeaser {
+                    slug: article.slug.clone(),
+                    metadata: article.metadata.clone(),
+                })
             })
             .collect::<Vec<_>>();
-        Json(teasers).into_response()
+        Json(PaginatedArticles {
+            articles: teasers,
+            total_pages,
+            current_page: page,
+        })
     }
 }
 

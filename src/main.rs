@@ -72,6 +72,7 @@ fn start_file_watcher(app_state: Arc<AppState>) {
 async fn start_server(app_state: Arc<AppState>, config: &Config) {
     let app = Router::new()
         .merge(handlers::articles::create_router())
+        .merge(handlers::tags::create_router())
         .with_state(app_state);
 
     let addr: SocketAddr = config.server_addr.parse().expect("Invalid server address");

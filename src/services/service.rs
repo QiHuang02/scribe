@@ -2,7 +2,7 @@ use crate::models::article::{Article, Metadata};
 use gray_matter::engine::YAML;
 use gray_matter::Matter;
 use serde_yaml::{from_value, Error as SerdeYAMLError};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Error as IoError;
 use std::path::Path;
@@ -31,11 +31,13 @@ impl From<SerdeYAMLError> for LoadError {
 pub struct ArticleStore {
     articles: Vec<Article>,
     slug_map: HashMap<String, usize>,
+    pub tags: HashSet<String>,
 }
 
 impl ArticleStore {
     pub fn new(content_dir: &str, article_extension: &str) -> Result<Self, LoadError> {
         let mut articles = Vec::new();
+        let mut all_tags = HashSet::new();
         let entries = fs::read_dir(Path::new(content_dir))?;
 
         for entry in entries {
@@ -60,6 +62,12 @@ impl ArticleStore {
                     .ok_or_else(|| LoadError::MissingFrontMatter(()))?;
                 let metadata: Metadata = from_value(data)?;
 
+                if !metadata.draft {
+                    for tag in &metadata.tags {
+                        all_tags.insert(tag.clone());
+                    }
+                }
+
                 let content = parsed_content.content;
 
                 articles.push(Article { slug, metadata, content });
@@ -74,7 +82,13 @@ impl ArticleStore {
             .map(|(idx, article)| (article.slug.clone(), idx))
             .collect();
 
-        Ok(Self { articles, slug_map })
+        Ok(Self { articles, slug_map, tags: all_tags })
+    }
+
+    pub fn  get_all_tags(&self) -> Vec<String> {
+        let mut tags: Vec<String> = self.tags.iter().cloned().collect();
+        tags.sort();
+        tags
     }
 
     pub fn get_by_slug(&self, slug: &str) -> Option<&Article> {
