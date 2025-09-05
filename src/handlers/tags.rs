@@ -1,9 +1,8 @@
-use std::sync::Arc;
+use crate::server::app::AppState;
 use axum::extract::State;
-use axum::{Json, Router};
 use axum::routing::get;
-use crate::AppState;
-use crate::models::article::Article;
+use axum::{Json, Router};
+use std::sync::Arc;
 
 pub fn create_router() -> Router<Arc<AppState>> {
     Router::new().route("/api/tags", get(get_all_tags))

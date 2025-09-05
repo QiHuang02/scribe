@@ -1,32 +1,11 @@
+use crate::handlers::error::LoadError;
 use crate::models::article::{Article, Metadata};
 use gray_matter::engine::YAML;
 use gray_matter::Matter;
-use serde_yaml::{from_value, Error as SerdeYAMLError};
+use serde_yaml::from_value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::Error as IoError;
 use std::path::Path;
-
-#[derive(Debug)]
-pub enum LoadError {
-    Io(()),
-    YamlParse(()),
-    MatterParse(()),
-    InvalidFileName(()),
-    MissingFrontMatter(()),
-}
-
-impl From<IoError> for LoadError {
-    fn from(_err: IoError) -> Self {
-        LoadError::Io(())
-    }
-}
-
-impl From<SerdeYAMLError> for LoadError {
-    fn from(_err: SerdeYAMLError) -> Self {
-        LoadError::YamlParse(())
-    }
-}
 
 pub struct ArticleStore {
     articles: Vec<Article>,
@@ -85,7 +64,7 @@ impl ArticleStore {
         Ok(Self { articles, slug_map, tags: all_tags })
     }
 
-    pub fn  get_all_tags(&self) -> Vec<String> {
+    pub fn get_all_tags(&self) -> Vec<String> {
         let mut tags: Vec<String> = self.tags.iter().cloned().collect();
         tags.sort();
         tags

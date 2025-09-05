@@ -1,6 +1,6 @@
-use crate::error::AppError;
+use crate::handlers::error::AppError;
 use crate::models::article::{ArticleRepresentation, ArticleTeaser, PaginatedArticles};
-use crate::AppState;
+use crate::server::app::AppState;
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 use axum::routing::get;
