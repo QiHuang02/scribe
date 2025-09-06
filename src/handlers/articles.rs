@@ -82,7 +82,7 @@ async fn get_articles_list(
                     } else {
                         &a.content
                     };
-                    
+
                     a.metadata.title.to_lowercase().contains(&query_lower)
                         || a.metadata.description.to_lowercase().contains(&query_lower)
                         || content_to_search.to_lowercase().contains(&query_lower)

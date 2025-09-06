@@ -39,7 +39,7 @@ impl Config {
 
         // 验证日志级别
         match self.log_level.to_lowercase().as_str() {
-            "trace" | "debug" | "info" | "warn" | "error" => {},
+            "trace" | "debug" | "info" | "warn" | "error" => {}
             _ => return Err(format!("Invalid log level: {}", self.log_level)),
         }
 

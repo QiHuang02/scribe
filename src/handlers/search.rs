@@ -78,7 +78,7 @@ async fn search_articles(
                 } else {
                     &article.content
                 };
-                
+
                 !article.metadata.draft && (
                     article.metadata.title.to_lowercase().contains(&query_lower)
                         || article.metadata.description.to_lowercase().contains(&query_lower)

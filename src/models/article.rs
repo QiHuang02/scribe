@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::time::SystemTime;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Metadata {
@@ -21,6 +22,10 @@ pub struct Article {
     pub slug: String,
     pub metadata: Metadata,
     pub content: String,
+    #[serde(skip_serializing)]
+    pub file_path: String,
+    #[serde(skip_serializing)]
+    pub last_modified: SystemTime,
 }
 
 #[derive(Serialize, Debug, Clone)]

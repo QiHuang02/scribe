@@ -245,15 +245,6 @@ impl SearchService {
             Vec::new()
         }
     }
-
-    pub fn get_search_stats(&self) -> HashMap<String, usize> {
-        self.search_stats.read()
-            .map(|stats| stats.clone())
-            .unwrap_or_else(|_| {
-                tracing::warn!("Failed to read search stats due to lock poisoning");
-                HashMap::new()
-            })
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
