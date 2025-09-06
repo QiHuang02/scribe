@@ -13,6 +13,14 @@ pub struct Config {
     pub article_extension: String,
     #[serde(default)]
     pub enable_nested_categories: bool,
+    #[serde(default = "default_search_index_dir")]
+    pub search_index_dir: String,
+    #[serde(default)]
+    pub enable_full_text_search: bool,
+}
+
+fn default_search_index_dir() -> String {
+    "search_index".to_string()
 }
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {

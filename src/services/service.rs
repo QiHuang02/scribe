@@ -20,7 +20,7 @@ impl ArticleStore {
         let mut articles = Vec::new();
         let mut all_tags = HashSet::new();
         let mut all_categories = HashSet::new();
-        
+
         if enable_nested_categories {
             Self::load_articles_recursive(
                 content_dir,
@@ -46,9 +46,9 @@ impl ArticleStore {
             .map(|(idx, article)| (article.slug.clone(), idx))
             .collect();
 
-        Ok(Self { 
-            articles, 
-            slug_map, 
+        Ok(Self {
+            articles,
+            slug_map,
             tags: all_tags,
             categories: all_categories,
         })
@@ -80,10 +80,10 @@ impl ArticleStore {
         all_categories: &mut HashSet<String>,
     ) -> Result<(), LoadError> {
         let base_path = Path::new(content_dir);
-        
+
         for entry in WalkDir::new(content_dir).into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
-            
+
             if path.is_file() && path.extension().map_or(false, |s| s == article_extension) {
                 // Calculate category from relative path
                 let category = if let Some(parent) = path.parent() {
@@ -146,7 +146,7 @@ impl ArticleStore {
 
         let content = parsed_content.content;
         articles.push(Article { slug, metadata, content });
-        
+
         Ok(())
     }
 

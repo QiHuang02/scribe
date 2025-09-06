@@ -8,12 +8,14 @@ use std::io::Error as IoError;
 #[derive(Debug)]
 pub enum AppError {
     NotFound(String),
+    BadRequest(String),
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
         };
 
         let body = Json(json!({

@@ -51,13 +51,37 @@ async fn get_articles_list(
             });
         }
         if let Some(query) = &params.q {
-            let query_lower = query.to_lowercase();
-            articles.retain(|a| {
-                a.metadata.title.to_lowercase().contains(&query_lower)
-                    || a.metadata.description.to_lowercase().contains(&query_lower)
-                    // Note: Searching in content might be slow depending on the size of the articles
-                    || a.content.to_lowercase().contains(&query_lower)
-            });
+            // 如果启用了全文搜索，使用搜索服务
+            if let Some(ref search_service) = state.search_service {
+                // 使用全文搜索
+                match search_service.search(query, 1000, false) {
+                    Ok(search_results) => {
+                        // 从搜索结果中获取对应的文章
+                        let search_slugs: std::collections::HashSet<String> =
+                            search_results.into_iter().map(|r| r.slug).collect();
+                        articles.retain(|a| search_slugs.contains(&a.slug));
+                    }
+                    Err(e) => {
+                        tracing::warn!("Full-text search failed, falling back to simple search: {:?}", e);
+                        // 回退到简单搜索
+                        let query_lower = query.to_lowercase();
+                        articles.retain(|a| {
+                            a.metadata.title.to_lowercase().contains(&query_lower)
+                                || a.metadata.description.to_lowercase().contains(&query_lower)
+                                || a.content.to_lowercase().contains(&query_lower)
+                        });
+                    }
+                }
+            } else {
+                // 使用传统的简单搜索
+                let query_lower = query.to_lowercase();
+                articles.retain(|a| {
+                    a.metadata.title.to_lowercase().contains(&query_lower)
+                        || a.metadata.description.to_lowercase().contains(&query_lower)
+                        // Note: Searching in content might be slow depending on the size of the articles
+                        || a.content.to_lowercase().contains(&query_lower)
+                });
+            }
         }
         articles
     };
