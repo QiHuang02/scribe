@@ -21,11 +21,17 @@ pub struct Metadata {
 pub struct Article {
     pub slug: String,
     pub metadata: Metadata,
-    pub content: String,
     #[serde(skip_serializing)]
     pub file_path: String,
     #[serde(skip_serializing)]
     pub last_modified: SystemTime,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct ArticleContent {
+    pub slug: String,
+    pub metadata: Metadata,
+    pub content: String,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -37,7 +43,7 @@ pub struct ArticleTeaser {
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum ArticleRepresentation {
-    Full(Article),
+    Full(ArticleContent),
     Teaser(ArticleTeaser),
 }
 

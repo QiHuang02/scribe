@@ -1,5 +1,5 @@
 use crate::handlers::error::AppError;
-use crate::models::article::{ArticleRepresentation, ArticleTeaser, PaginatedArticles};
+use crate::models::article::{ArticleContent, ArticleRepresentation, ArticleTeaser, PaginatedArticles};
 use crate::server::app::AppState;
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
@@ -38,7 +38,9 @@ async fn get_articles_list(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ArticleParams>,
 ) -> Result<impl IntoResponse, AppError> {
-    let store = state.store.read()
+    let store = state
+        .store
+        .read()
         .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
 
     let all_matching_articles = {
@@ -60,22 +62,29 @@ async fn get_articles_list(
                         articles.retain(|a| search_slugs.contains(&a.slug));
                     }
                     Err(e) => {
-                        tracing::warn!("Full-text search failed, falling back to simple search: {:?}", e);
+                        tracing::warn!(
+                            "Full-text search failed, falling back to simple search: {:?}",
+                            e
+                        );
                         let query_lower = query.to_lowercase();
                         articles.retain(|a| {
+                            let content =
+                                store.load_content_for(a).unwrap_or_else(|_| String::new());
                             a.metadata.title.to_lowercase().contains(&query_lower)
                                 || a.metadata.description.to_lowercase().contains(&query_lower)
-                                || a.content.to_lowercase().contains(&query_lower)
+                                || content.to_lowercase().contains(&query_lower)
                         });
                     }
                 }
             } else {
                 let query_lower = query.to_lowercase();
                 articles.retain(|a| {
-                    let content_to_search = if a.content.len() > state.config.content_search_limit {
-                        &a.content[..state.config.content_search_limit]
+                    let content =
+                        store.load_content_for(a).unwrap_or_else(|_| String::new());
+                    let content_to_search = if content.len() > state.config.content_search_limit {
+                        &content[..state.config.content_search_limit]
                     } else {
-                        &a.content
+                        &content
                     };
 
                     a.metadata.title.to_lowercase().contains(&query_lower)
@@ -97,7 +106,16 @@ async fn get_articles_list(
 
     let result = if params.include_content.unwrap_or(false) {
         let articles_with_content = paginated_articles
-            .map(|article| ArticleRepresentation::Full(article.clone()))
+            .map(|article| {
+                let content = store
+                    .load_content_for(article)
+                    .unwrap_or_else(|_| String::new());
+                ArticleRepresentation::Full(ArticleContent {
+                    slug: article.slug.clone(),
+                    metadata: article.metadata.clone(),
+                    content,
+                })
+            })
             .collect::<Vec<_>>();
         Json(PaginatedArticles {
             articles: articles_with_content,
@@ -127,12 +145,23 @@ async fn get_article_by_slug(
     State(state): State<Arc<AppState>>,
     Path(slug): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let store = state.store.read()
+    let store = state
+        .store
+        .read()
         .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
     let article = store.get_by_slug(&slug);
 
     match article {
-        Some(article) if !article.metadata.draft => Ok(Json(article.clone())),
+        Some(article) if !article.metadata.draft => {
+            let content = store
+                .load_content_for(article)
+                .map_err(|e| AppError::BadRequest(e.to_string()))?;
+            Ok(Json(ArticleContent {
+                slug: article.slug.clone(),
+                metadata: article.metadata.clone(),
+                content,
+            }))
+        }
         Some(_) => Err(AppError::NotFound(format!(
             "Article with slug {} not found", slug
         ))),
