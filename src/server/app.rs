@@ -29,22 +29,23 @@ pub async fn create_app_state(
 
     let search_service = if config.enable_full_text_search {
         match SearchService::new(&config.search_index_dir) {
-            Ok(service) => {
-                if let Err(e) = service.index_articles(
-                    &article_store
-                        .query(|_| true)
-                        .into_iter()
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                    config.search_index_heap_size,
-                ) {
-                    tracing::warn!("Failed to index articles: {:?}", e);
-                    None
-                } else {
-                    info!("Search index updated successfully!");
-                    Some(Arc::new(service))
+            Ok(service) => match article_store.load_full_articles() {
+                Ok(articles) => {
+                    if let Err(e) =
+                        service.index_articles(&articles, config.search_index_heap_size)
+                    {
+                        tracing::warn!("Failed to index articles: {:?}", e);
+                        None
+                    } else {
+                        info!("Search index updated successfully!");
+                        Some(Arc::new(service))
+                    }
                 }
-            }
+                Err(e) => {
+                    tracing::warn!("Failed to load articles for indexing: {:?}", e);
+                    None
+                }
+            },
             Err(e) => {
                 tracing::warn!("Failed to initialize search service: {:?}", e);
                 None
@@ -143,13 +144,19 @@ async fn watch_articles(state: Arc<AppState>) {
 
 fn reindex_articles_with_logging(state: &Arc<AppState>, store: &ArticleStore) {
     if let Some(ref search_service) = state.search_service {
-        let articles: Vec<_> = store.query(|_| true).into_iter().cloned().collect();
-        if let Err(e) =
-            search_service.index_articles(&articles, state.config.search_index_heap_size)
-        {
-            tracing::warn!("Failed to reindex articles for search: {:?}", e);
-        } else {
-            info!("Search index updated successfully!");
+        match store.load_full_articles() {
+            Ok(articles) => {
+                if let Err(e) = search_service
+                    .index_articles(&articles, state.config.search_index_heap_size)
+                {
+                    tracing::warn!("Failed to reindex articles for search: {:?}", e);
+                } else {
+                    info!("Search index updated successfully!");
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load articles for search indexing: {:?}", e);
+            }
         }
     }
 }

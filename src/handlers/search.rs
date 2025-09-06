@@ -66,21 +66,27 @@ async fn search_articles(
         Err(e) => {
             tracing::error!("Search error: {:?}", e);
 
-            let store = state.store.read()
+            let store = state
+                .store
+                .read()
                 .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
             let query_lower = params.q.to_lowercase();
             let articles = store.query(|article| {
-                let content_to_search = if article.content.len() > 10_000 {
-                    &article.content[..10_000]
+                let content = store
+                    .load_content_for(article)
+                    .unwrap_or_else(|_| String::new());
+                let content_to_search = if content.len() > 10_000 {
+                    &content[..10_000]
                 } else {
-                    &article.content
+                    &content
                 };
 
-                !article.metadata.draft && (
-                    article.metadata.title.to_lowercase().contains(&query_lower)
-                        || article.metadata.description.to_lowercase().contains(&query_lower)
-                        || content_to_search.to_lowercase().contains(&query_lower)
-                )
+                !article.metadata.draft
+                    && (
+                        article.metadata.title.to_lowercase().contains(&query_lower)
+                            || article.metadata.description.to_lowercase().contains(&query_lower)
+                            || content_to_search.to_lowercase().contains(&query_lower)
+                    )
             });
 
             let fallback_results: Vec<SearchResult> = articles

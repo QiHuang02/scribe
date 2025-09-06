@@ -1,5 +1,5 @@
 use crate::handlers::error::LoadError;
-use crate::models::article::{Article, Metadata};
+use crate::models::article::{Article, ArticleContent, Metadata};
 use gray_matter::engine::YAML;
 use gray_matter::Matter;
 use serde_yaml::from_value;
@@ -330,7 +330,7 @@ impl ArticleStore {
 
         let matter = Matter::<YAML>::new();
         let parsed_content = matter
-            .parse(&file_content)
+            .parse::<serde_yaml::Value>(&file_content)
             .map_err(|e| LoadError::MatterParse(
                 format!("Failed to parse front matter in {}: {}", path.to_string_lossy(), e)
             ))?;
@@ -356,11 +356,9 @@ impl ArticleStore {
             .and_then(|m| m.modified())
             .unwrap_or(SystemTime::UNIX_EPOCH);
 
-        let content = parsed_content.content;
         articles.push(Article {
             slug,
             metadata,
-            content,
             file_path: path.to_string_lossy().to_string(),
             last_modified,
         });
@@ -391,6 +389,35 @@ impl ArticleStore {
         self.articles
             .iter()
             .filter(|&a| filter(a))
+            .collect()
+    }
+
+    pub fn load_content_for(&self, article: &Article) -> Result<String, LoadError> {
+        let file_content = fs::read_to_string(&article.file_path)?;
+        let matter = Matter::<YAML>::new();
+        let parsed_content = matter
+            .parse::<serde_yaml::Value>(&file_content)
+            .map_err(|e| {
+                LoadError::MatterParse(format!(
+                    "Failed to parse front matter in {}: {}",
+                    article.file_path, e
+                ))
+            })?;
+        Ok(parsed_content.content)
+    }
+
+    pub fn load_full_articles(&self) -> Result<Vec<ArticleContent>, LoadError> {
+        self
+            .articles
+            .iter()
+            .map(|a| {
+                let content = self.load_content_for(a)?;
+                Ok(ArticleContent {
+                    slug: a.slug.clone(),
+                    metadata: a.metadata.clone(),
+                    content,
+                })
+            })
             .collect()
     }
 }

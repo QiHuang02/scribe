@@ -1,4 +1,4 @@
-use crate::models::article::Article;
+use crate::models::article::ArticleContent;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -102,7 +102,7 @@ impl SearchService {
         schema_builder.build()
     }
 
-    pub fn index_articles(&self, articles: &[Article], heap_size: usize) -> Result<(), SearchError> {
+    pub fn index_articles(&self, articles: &[ArticleContent], heap_size: usize) -> Result<(), SearchError> {
         let mut index_writer = self.index.writer(heap_size)?;
 
         index_writer.delete_all_documents()?;
