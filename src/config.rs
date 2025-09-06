@@ -5,6 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -34,9 +35,8 @@ impl Config {
             return Err(format!("Invalid server address: {}", self.server_addr));
         }
 
-        match self.log_level.to_lowercase().as_str() {
-            "trace" | "debug" | "info" | "warn" | "error" => {}
-            _ => return Err(format!("Invalid log level: {}", self.log_level)),
+        if EnvFilter::try_new(&self.log_level).is_err() {
+            return Err(format!("Invalid log level: {}", self.log_level));
         }
 
         if self.latest_articles_count == 0 {
