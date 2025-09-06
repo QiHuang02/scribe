@@ -69,13 +69,20 @@ async fn search_articles(
             tracing::error!("Search error: {:?}", e);
 
             // 回退到传统搜索
-            let store = state.store.read().unwrap();
+            let store = state.store.read()
+                .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
             let query_lower = params.q.to_lowercase();
             let articles = store.query(|article| {
+                let content_to_search = if article.content.len() > 10_000 {
+                    &article.content[..10_000]
+                } else {
+                    &article.content
+                };
+                
                 !article.metadata.draft && (
                     article.metadata.title.to_lowercase().contains(&query_lower)
                         || article.metadata.description.to_lowercase().contains(&query_lower)
-                        || article.content.to_lowercase().contains(&query_lower)
+                        || content_to_search.to_lowercase().contains(&query_lower)
                 )
             });
 

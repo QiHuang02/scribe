@@ -61,12 +61,12 @@ impl SearchService {
             Index::create_in_dir(index_path, schema.clone())?
         };
 
-        let slug_field = schema.get_field("slug").unwrap();
-        let title_field = schema.get_field("title").unwrap();
-        let content_field = schema.get_field("content").unwrap();
-        let description_field = schema.get_field("description").unwrap();
-        let tags_field = schema.get_field("tags").unwrap();
-        let category_field = schema.get_field("category").unwrap();
+        let slug_field = schema.get_field("slug")?;
+        let title_field = schema.get_field("title")?;
+        let content_field = schema.get_field("content")?;
+        let description_field = schema.get_field("description")?;
+        let tags_field = schema.get_field("tags")?;
+        let category_field = schema.get_field("category")?;
 
         let reader = index
             .reader_builder()
@@ -103,8 +103,8 @@ impl SearchService {
         schema_builder.build()
     }
 
-    pub fn index_articles(&self, articles: &[Article]) -> Result<(), SearchError> {
-        let mut index_writer = self.index.writer(50_000_000)?; // 50MB heap
+    pub fn index_articles(&self, articles: &[Article], heap_size: usize) -> Result<(), SearchError> {
+        let mut index_writer = self.index.writer(heap_size)?;
 
         // 清除现有索引
         index_writer.delete_all_documents()?;
@@ -247,7 +247,12 @@ impl SearchService {
     }
 
     pub fn get_search_stats(&self) -> HashMap<String, usize> {
-        self.search_stats.read().unwrap().clone()
+        self.search_stats.read()
+            .map(|stats| stats.clone())
+            .unwrap_or_else(|_| {
+                tracing::warn!("Failed to read search stats due to lock poisoning");
+                HashMap::new()
+            })
     }
 }
 

@@ -14,29 +14,23 @@ pub struct AppState {
     pub search_service: Option<Arc<SearchService>>,
 }
 
-pub async fn create_app_state(config: &Arc<Config>) -> Arc<AppState> {
-    let article_store = match ArticleStore::new(&config.article_dir, &config.article_extension, config.enable_nested_categories) {
-        Ok(store) => store,
-        Err(e) => {
-            eprintln!("Failed to load articles: {:?}", e);
-            std::process::exit(1);
-        }
-    };
+pub async fn create_app_state(config: &Arc<Config>) -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
+    let article_store = ArticleStore::new(&config.article_dir, &config.article_extension, config.enable_nested_categories)?;
 
     // 初始化搜索服务（如果启用）
     let search_service = if config.enable_full_text_search {
         match SearchService::new(&config.search_index_dir) {
             Ok(service) => {
                 // 索引现有文章
-                if let Err(e) = service.index_articles(&article_store.query(|_| true).into_iter().cloned().collect::<Vec<_>>()) {
-                    eprintln!("Failed to index articles: {:?}", e);
+                if let Err(e) = service.index_articles(&article_store.query(|_| true).into_iter().cloned().collect::<Vec<_>>(), config.search_index_heap_size) {
+                    tracing::warn!("Failed to index articles: {:?}", e);
                     None
                 } else {
                     Some(Arc::new(service))
                 }
             }
             Err(e) => {
-                eprintln!("Failed to initialize search service: {:?}", e);
+                tracing::warn!("Failed to initialize search service: {:?}", e);
                 None
             }
         }
@@ -44,11 +38,11 @@ pub async fn create_app_state(config: &Arc<Config>) -> Arc<AppState> {
         None
     };
 
-    Arc::new(AppState {
+    Ok(Arc::new(AppState {
         store: Arc::new(RwLock::new(article_store)),
         config: Arc::clone(config),
         search_service,
-    })
+    }))
 }
 
 pub fn start_file_watcher(app_state: Arc<AppState>) {
@@ -64,7 +58,7 @@ pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
         .with_state(app_state);
 
     let addr: SocketAddr = config.server_addr.parse().expect("Invalid server address");
-    tracing::info!("Starting server on {}", addr);
+    info!("Starting server on {}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
@@ -73,11 +67,10 @@ async fn watch_articles(state: Arc<AppState>) {
     let (tx, mut rx) = mpsc::channel(10);
 
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        if let Ok(event) = res {
-            if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
+        if let Ok(event) = res
+            && (event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove()) {
                 tx.blocking_send(()).unwrap();
             }
-        }
     })
         .unwrap();
 
@@ -89,7 +82,7 @@ async fn watch_articles(state: Arc<AppState>) {
 
     info!("Hot reloading enable for '{}'", state.config.article_dir);
 
-    while (rx.recv().await).is_some() {
+    while rx.recv().await.is_some() {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         info!("File change detected, reloading articles...");
@@ -101,8 +94,8 @@ async fn watch_articles(state: Arc<AppState>) {
                 // 重新索引搜索（如果搜索服务启用）
                 if let Some(ref search_service) = state.search_service {
                     let articles: Vec<_> = store_guard.query(|_| true).into_iter().cloned().collect();
-                    if let Err(e) = search_service.index_articles(&articles) {
-                        eprintln!("Failed to reindex articles for search: {:?}", e);
+                    if let Err(e) = search_service.index_articles(&articles, state.config.search_index_heap_size) {
+                        tracing::warn!("Failed to reindex articles for search: {:?}", e);
                     } else {
                         info!("Search index updated successfully!");
                     }
@@ -111,7 +104,7 @@ async fn watch_articles(state: Arc<AppState>) {
                 info!("Articles reloaded successfully!");
             }
             Err(e) => {
-                eprintln!("Error reloading articles: {:?}", e);
+                tracing::error!("Error reloading articles: {:?}", e);
             }
         }
     }

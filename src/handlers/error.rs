@@ -29,21 +29,43 @@ impl IntoResponse for AppError {
 
 #[derive(Debug)]
 pub enum LoadError {
-    Io(()),
-    YamlParse(()),
-    MatterParse(()),
-    InvalidFileName(()),
-    MissingFrontMatter(()),
+    Io(IoError),
+    YamlParse(SerdeYAMLError),
+    MatterParse(String),
+    InvalidFileName(String),
+    MissingFrontMatter(String),
+}
+
+impl std::fmt::Display for LoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LoadError::Io(err) => write!(f, "IO error: {}", err),
+            LoadError::YamlParse(err) => write!(f, "YAML parsing error: {}", err),
+            LoadError::MatterParse(msg) => write!(f, "Front matter parsing error: {}", msg),
+            LoadError::InvalidFileName(filename) => write!(f, "Invalid file name: {}", filename),
+            LoadError::MissingFrontMatter(filename) => write!(f, "Missing front matter in file: {}", filename),
+        }
+    }
+}
+
+impl std::error::Error for LoadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            LoadError::Io(err) => Some(err),
+            LoadError::YamlParse(err) => Some(err),
+            _ => None,
+        }
+    }
 }
 
 impl From<IoError> for LoadError {
-    fn from(_err: IoError) -> Self {
-        LoadError::Io(())
+    fn from(err: IoError) -> Self {
+        LoadError::Io(err)
     }
 }
 
 impl From<SerdeYAMLError> for LoadError {
-    fn from(_err: SerdeYAMLError) -> Self {
-        LoadError::YamlParse(())
+    fn from(err: SerdeYAMLError) -> Self {
+        LoadError::YamlParse(err)
     }
 }

@@ -37,8 +37,9 @@ pub fn create_router() -> Router<Arc<AppState>> {
 async fn get_articles_list(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ArticleParams>,
-) -> impl IntoResponse {
-    let store = state.store.read().unwrap();
+) -> Result<impl IntoResponse, AppError> {
+    let store = state.store.read()
+        .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
 
     let all_matching_articles = {
         let mut articles = store.query(|article| !article.metadata.draft);
@@ -47,7 +48,7 @@ async fn get_articles_list(
         }
         if let Some(category) = &params.category {
             articles.retain(|a| {
-                a.metadata.category.as_ref().map_or(false, |cat| cat == category)
+                a.metadata.category.as_ref() == Some(category)
             });
         }
         if let Some(query) = &params.q {
@@ -76,10 +77,15 @@ async fn get_articles_list(
                 // 使用传统的简单搜索
                 let query_lower = query.to_lowercase();
                 articles.retain(|a| {
+                    let content_to_search = if a.content.len() > state.config.content_search_limit {
+                        &a.content[..state.config.content_search_limit]
+                    } else {
+                        &a.content
+                    };
+                    
                     a.metadata.title.to_lowercase().contains(&query_lower)
                         || a.metadata.description.to_lowercase().contains(&query_lower)
-                        // Note: Searching in content might be slow depending on the size of the articles
-                        || a.content.to_lowercase().contains(&query_lower)
+                        || content_to_search.to_lowercase().contains(&query_lower)
                 });
             }
         }
@@ -94,7 +100,7 @@ async fn get_articles_list(
 
     let paginated_articles = all_matching_articles.into_iter().skip(skip).take(limit);
 
-    if params.include_content.unwrap_or(false) {
+    let result = if params.include_content.unwrap_or(false) {
         let articles_with_content = paginated_articles
             .map(|article| ArticleRepresentation::Full(article.clone()))
             .collect::<Vec<_>>();
@@ -117,14 +123,17 @@ async fn get_articles_list(
             total_pages,
             current_page: page,
         })
-    }
+    };
+
+    Ok(result)
 }
 
 async fn get_article_by_slug(
     State(state): State<Arc<AppState>>,
     Path(slug): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let store = state.store.read().unwrap();
+    let store = state.store.read()
+        .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
     let article = store.get_by_slug(&slug);
 
     match article {

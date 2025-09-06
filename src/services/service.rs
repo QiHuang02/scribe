@@ -65,7 +65,7 @@ impl ArticleStore {
         for entry in entries {
             let path = entry?.path();
 
-            if path.is_file() && path.extension().map_or(false, |s| s == article_extension) {
+            if path.is_file() && path.extension().is_some_and(|s| s == article_extension) {
                 Self::process_article_file(&path, None, articles, all_tags)?;
             }
         }
@@ -84,14 +84,14 @@ impl ArticleStore {
         for entry in WalkDir::new(content_dir).into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
 
-            if path.is_file() && path.extension().map_or(false, |s| s == article_extension) {
+            if path.is_file() && path.extension().is_some_and(|s| s == article_extension) {
                 // Calculate category from relative path
                 let category = if let Some(parent) = path.parent() {
                     if parent != base_path {
                         parent.strip_prefix(base_path)
                             .ok()
                             .and_then(|p| p.to_str())
-                            .map(|s| s.replace('\\', "/"))
+                            .map(|s| s.replace(std::path::MAIN_SEPARATOR, "/"))
                     } else {
                         None
                     }
@@ -119,18 +119,24 @@ impl ArticleStore {
             .file_stem()
             .and_then(|s| s.to_str())
             .map(String::from)
-            .ok_or_else(|| LoadError::InvalidFileName(()))?;
+            .ok_or_else(|| LoadError::InvalidFileName(
+                path.to_string_lossy().to_string()
+            ))?;
 
         let file_content = fs::read_to_string(path)?;
 
         let matter = Matter::<YAML>::new();
         let parsed_content = matter
             .parse(&file_content)
-            .map_err(|_e| LoadError::MatterParse(()))?;
+            .map_err(|e| LoadError::MatterParse(
+                format!("Failed to parse front matter in {}: {}", path.to_string_lossy(), e)
+            ))?;
 
         let data = parsed_content
             .data
-            .ok_or_else(|| LoadError::MissingFrontMatter(()))?;
+            .ok_or_else(|| LoadError::MissingFrontMatter(
+                path.to_string_lossy().to_string()
+            ))?;
         let mut metadata: Metadata = from_value(data)?;
 
         // Set category from directory structure if nested categories are enabled
