@@ -11,8 +11,7 @@ pub fn create_router() -> Router<Arc<AppState>> {
 }
 
 async fn get_all_tags(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
-    let store = state.store.read()
-        .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
+    let store = state.store.read().await;
     let tags = store.get_all_tags();
     Ok(Json(tags))
 }

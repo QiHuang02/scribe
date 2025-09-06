@@ -1,5 +1,7 @@
 use crate::handlers::error::AppError;
-use crate::models::article::{ArticleContent, ArticleRepresentation, ArticleTeaser, PaginatedArticles};
+use crate::models::article::{
+    ArticleContent, ArticleRepresentation, ArticleTeaser, PaginatedArticles,
+};
 use crate::server::app::AppState;
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
@@ -38,10 +40,7 @@ async fn get_articles_list(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ArticleParams>,
 ) -> Result<impl IntoResponse, AppError> {
-    let store = state
-        .store
-        .read()
-        .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
+    let store = state.store.read().await;
 
     let all_matching_articles = {
         let mut articles = store.query(|article| !article.metadata.draft);
@@ -49,9 +48,7 @@ async fn get_articles_list(
             articles.retain(|a| a.metadata.tags.contains(tag));
         }
         if let Some(category) = &params.category {
-            articles.retain(|a| {
-                a.metadata.category.as_ref() == Some(category)
-            });
+            articles.retain(|a| a.metadata.category.as_ref() == Some(category));
         }
         if let Some(query) = &params.q {
             if let Some(ref search_service) = state.search_service {
@@ -79,8 +76,7 @@ async fn get_articles_list(
             } else {
                 let query_lower = query.to_lowercase();
                 articles.retain(|a| {
-                    let content =
-                        store.load_content_for(a).unwrap_or_else(|_| String::new());
+                    let content = store.load_content_for(a).unwrap_or_else(|_| String::new());
                     let content_to_search = if content.len() > state.config.content_search_limit {
                         &content[..state.config.content_search_limit]
                     } else {
@@ -145,10 +141,7 @@ async fn get_article_by_slug(
     State(state): State<Arc<AppState>>,
     Path(slug): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let store = state
-        .store
-        .read()
-        .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
+    let store = state.store.read().await;
     let article = store.get_by_slug(&slug);
 
     match article {
@@ -163,10 +156,12 @@ async fn get_article_by_slug(
             }))
         }
         Some(_) => Err(AppError::NotFound(format!(
-            "Article with slug {} not found", slug
+            "Article with slug {} not found",
+            slug
         ))),
         None => Err(AppError::NotFound(format!(
-            "Article with slug {} not found", slug
+            "Article with slug {} not found",
+            slug
         ))),
     }
 }

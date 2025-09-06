@@ -43,15 +43,18 @@ async fn search_articles(
     State(state): State<Arc<AppState>>,
     Query(params): Query<SearchParams>,
 ) -> Result<impl IntoResponse, AppError> {
-    let search_service = state.search_service.as_ref().ok_or_else(|| {
-        AppError::BadRequest("Full-text search is not enabled".to_string())
-    })?;
+    let search_service = state
+        .search_service
+        .as_ref()
+        .ok_or_else(|| AppError::BadRequest("Full-text search is not enabled".to_string()))?;
 
     let limit = params.limit.unwrap_or(20);
     let highlights = params.highlights.unwrap_or(true);
 
     if params.q.trim().is_empty() {
-        return Err(AppError::BadRequest("Search query cannot be empty".to_string()));
+        return Err(AppError::BadRequest(
+            "Search query cannot be empty".to_string(),
+        ));
     }
 
     match search_service.search(&params.q, limit, highlights) {
@@ -66,10 +69,7 @@ async fn search_articles(
         Err(e) => {
             tracing::error!("Search error: {:?}", e);
 
-            let store = state
-                .store
-                .read()
-                .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
+            let store = state.store.read().await;
             let query_lower = params.q.to_lowercase();
             let articles = store.query(|article| {
                 let content = store
@@ -82,11 +82,13 @@ async fn search_articles(
                 };
 
                 !article.metadata.draft
-                    && (
-                        article.metadata.title.to_lowercase().contains(&query_lower)
-                            || article.metadata.description.to_lowercase().contains(&query_lower)
-                            || content_to_search.to_lowercase().contains(&query_lower)
-                    )
+                    && (article.metadata.title.to_lowercase().contains(&query_lower)
+                        || article
+                            .metadata
+                            .description
+                            .to_lowercase()
+                            .contains(&query_lower)
+                        || content_to_search.to_lowercase().contains(&query_lower))
             });
 
             let fallback_results: Vec<SearchResult> = articles
@@ -114,9 +116,10 @@ async fn search_articles(
 async fn get_popular_searches(
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
-    let search_service = state.search_service.as_ref().ok_or_else(|| {
-        AppError::BadRequest("Full-text search is not enabled".to_string())
-    })?;
+    let search_service = state
+        .search_service
+        .as_ref()
+        .ok_or_else(|| AppError::BadRequest("Full-text search is not enabled".to_string()))?;
 
     let popular_searches = search_service.get_popular_searches(10);
     let searches: Vec<PopularSearch> = popular_searches
