@@ -3,9 +3,9 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -23,12 +23,19 @@ pub struct Config {
     pub search_index_heap_size: usize,
     #[serde(default = "default_content_search_limit")]
     pub content_search_limit: usize,
+    #[serde(default = "default_cache_max_capacity")]
+    pub cache_max_capacity: u64,
+    #[serde(default = "default_cache_ttl_seconds")]
+    pub cache_ttl_seconds: u64,
 }
 
 impl Config {
     pub fn validate(&self) -> Result<(), String> {
         if !Path::new(&self.article_dir).exists() {
-            return Err(format!("Article directory does not exist: {}", self.article_dir));
+            return Err(format!(
+                "Article directory does not exist: {}",
+                self.article_dir
+            ));
         }
 
         if self.server_addr.parse::<SocketAddr>().is_err() {
@@ -44,7 +51,18 @@ impl Config {
         }
 
         if self.search_index_heap_size < 1_000_000 {
-            return Err(format!("Search index heap size too small: {} bytes (minimum: 1MB)", self.search_index_heap_size));
+            return Err(format!(
+                "Search index heap size too small: {} bytes (minimum: 1MB)",
+                self.search_index_heap_size
+            ));
+        }
+
+        if self.cache_max_capacity == 0 {
+            return Err("Cache capacity must be greater than 0".to_string());
+        }
+
+        if self.cache_ttl_seconds == 0 {
+            return Err("Cache TTL must be greater than 0".to_string());
         }
 
         Ok(())
@@ -63,6 +81,14 @@ fn default_content_search_limit() -> usize {
     10_000
 }
 
+fn default_cache_max_capacity() -> u64 {
+    1_000
+}
+
+fn default_cache_ttl_seconds() -> u64 {
+    60
+}
+
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     let config_content = fs::read_to_string("config.toml")?;
     let config: Config = toml::from_str(&config_content)?;
@@ -71,7 +97,8 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
 
 pub fn initialize_config() -> Result<Arc<Config>, Box<dyn std::error::Error>> {
     let config = load_config()?;
-    config.validate()
+    config
+        .validate()
         .map_err(|e| format!("Configuration validation failed: {}", e))?;
     Ok(Arc::new(config))
 }

@@ -21,6 +21,11 @@ serde_yaml = "0.9.33"
 toml = "0.9.5"
 gray_matter = "0.3.2"
 
+# 缓存
+moka2 = { version = "0.13.0", features = ["future"] }
+bytes = "1.6"
+tower = "0.5"
+
 # 错误处理
 thiserror = "2.0.16"
 
