@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::models::article::Article;
 use crate::services::search::SearchService;
 use crate::services::service::ArticleStore;
 use axum::Router;
@@ -16,13 +15,11 @@ pub struct AppState {
 }
 
 pub async fn create_app_state(config: &Arc<Config>) -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
-    let article_store = ArticleStore::new(&config.article_dir, &config.article_extension, config.enable_nested_categories)?;
+    let article_store = ArticleStore::new(&config.article_dir, config.enable_nested_categories)?;
 
-    // 初始化搜索服务（如果启用）
     let search_service = if config.enable_full_text_search {
         match SearchService::new(&config.search_index_dir) {
             Ok(service) => {
-                // 索引现有文章
                 if let Err(e) = service.index_articles(&article_store.query(|_| true).into_iter().cloned().collect::<Vec<_>>(), config.search_index_heap_size) {
                     tracing::warn!("Failed to index articles: {:?}", e);
                     None
@@ -90,9 +87,8 @@ async fn watch_articles(state: Arc<AppState>) {
         info!("File change detected, performing incremental update...");
         let mut store_guard = state.store.write().unwrap();
 
-        match store_guard.incremental_update(&state.config.article_dir, &state.config.article_extension, state.config.enable_nested_categories) {
+        match store_guard.incremental_update(&state.config.article_dir, state.config.enable_nested_categories) {
             Ok(true) => {
-                // 重新索引搜索（如果搜索服务启用且有变化）
                 reindex_articles_with_logging(&state, &store_guard);
                 info!("Articles updated incrementally!");
             }
@@ -101,13 +97,11 @@ async fn watch_articles(state: Arc<AppState>) {
             }
             Err(e) => {
                 tracing::error!("Error during incremental update: {:?}", e);
-                // 回退到全量重载
                 info!("Falling back to full reload...");
-                match ArticleStore::new(&state.config.article_dir, &state.config.article_extension, state.config.enable_nested_categories) {
+                match ArticleStore::new(&state.config.article_dir, state.config.enable_nested_categories) {
                     Ok(new_store) => {
                         *store_guard = new_store;
 
-                        // 重新索引搜索（如果搜索服务启用）
                         reindex_articles_with_logging(&state, &store_guard);
 
                         info!("Full reload completed successfully!");

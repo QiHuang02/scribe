@@ -44,7 +44,6 @@ pub struct SearchService {
     description_field: Field,
     tags_field: Field,
     category_field: Field,
-    // 搜索统计
     search_stats: std::sync::RwLock<HashMap<String, usize>>,
     recent_searches: std::sync::RwLock<Vec<SearchStats>>,
 }
@@ -106,7 +105,6 @@ impl SearchService {
     pub fn index_articles(&self, articles: &[Article], heap_size: usize) -> Result<(), SearchError> {
         let mut index_writer = self.index.writer(heap_size)?;
 
-        // 清除现有索引
         index_writer.delete_all_documents()?;
 
         for article in articles {
@@ -139,7 +137,6 @@ impl SearchService {
     ) -> Result<Vec<SearchResult>, SearchError> {
         let searcher = self.reader.searcher();
 
-        // 记录搜索统计
         self.record_search(query_text);
 
         let query = self.query_parser.parse_query(query_text)?;
@@ -169,7 +166,6 @@ impl SearchService {
                 .to_string();
 
             let highlights = if with_highlights {
-                // 简单的高亮实现，可以后续用 tantivy 的 Snippet 功能增强
                 Some(self.create_simple_highlights(query_text, &title, &description))
             } else {
                 None
@@ -191,13 +187,11 @@ impl SearchService {
         let mut highlights = Vec::new();
         let query_lower = query.to_lowercase();
 
-        // 简单的高亮逻辑：查找包含查询词的句子片段
         if title.to_lowercase().contains(&query_lower) {
             highlights.push(format!("Title: {}", title));
         }
 
         if description.to_lowercase().contains(&query_lower) {
-            // 截取包含查询词的描述片段
             let desc_lower = description.to_lowercase();
             if let Some(pos) = desc_lower.find(&query_lower) {
                 let start = pos.saturating_sub(50);
@@ -211,12 +205,10 @@ impl SearchService {
     }
 
     fn record_search(&self, query: &str) {
-        // 更新搜索统计
         if let Ok(mut stats) = self.search_stats.write() {
             *stats.entry(query.to_string()).or_insert(0) += 1;
         }
 
-        // 记录最近搜索
         if let Ok(mut recent) = self.recent_searches.write() {
             let search_stat = SearchStats {
                 query: query.to_string(),
@@ -225,7 +217,6 @@ impl SearchService {
             };
             recent.push(search_stat);
 
-            // 只保留最近1000次搜索
             if recent.len() > 1000 {
                 let len = recent.len();
                 recent.drain(0..len - 1000);

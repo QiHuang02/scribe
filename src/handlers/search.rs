@@ -43,7 +43,6 @@ async fn search_articles(
     State(state): State<Arc<AppState>>,
     Query(params): Query<SearchParams>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 检查是否启用了搜索服务
     let search_service = state.search_service.as_ref().ok_or_else(|| {
         AppError::BadRequest("Full-text search is not enabled".to_string())
     })?;
@@ -51,7 +50,6 @@ async fn search_articles(
     let limit = params.limit.unwrap_or(20);
     let highlights = params.highlights.unwrap_or(true);
 
-    // 如果查询为空，回退到传统搜索
     if params.q.trim().is_empty() {
         return Err(AppError::BadRequest("Search query cannot be empty".to_string()));
     }
@@ -68,7 +66,6 @@ async fn search_articles(
         Err(e) => {
             tracing::error!("Search error: {:?}", e);
 
-            // 回退到传统搜索
             let store = state.store.read()
                 .map_err(|_| AppError::BadRequest("Failed to acquire store lock".to_string()))?;
             let query_lower = params.q.to_lowercase();
