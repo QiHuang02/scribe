@@ -6,8 +6,9 @@ use axum::Router;
 use moka2::future::Cache;
 use notify::{RecursiveMode, Watcher};
 use std::net::SocketAddr;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -31,8 +32,7 @@ pub async fn create_app_state(
         match SearchService::new(&config.search_index_dir) {
             Ok(service) => match article_store.load_full_articles() {
                 Ok(articles) => {
-                    if let Err(e) =
-                        service.index_articles(&articles, config.search_index_heap_size)
+                    if let Err(e) = service.index_articles(&articles, config.search_index_heap_size)
                     {
                         tracing::warn!("Failed to index articles: {:?}", e);
                         None
@@ -104,7 +104,7 @@ async fn watch_articles(state: Arc<AppState>) {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         info!("File change detected, performing incremental update...");
-        let mut store_guard = state.store.write().unwrap();
+        let mut store_guard = state.store.write().await;
 
         match store_guard.incremental_update(
             &state.config.article_dir,
@@ -146,8 +146,8 @@ fn reindex_articles_with_logging(state: &Arc<AppState>, store: &ArticleStore) {
     if let Some(ref search_service) = state.search_service {
         match store.load_full_articles() {
             Ok(articles) => {
-                if let Err(e) = search_service
-                    .index_articles(&articles, state.config.search_index_heap_size)
+                if let Err(e) =
+                    search_service.index_articles(&articles, state.config.search_index_heap_size)
                 {
                     tracing::warn!("Failed to reindex articles for search: {:?}", e);
                 } else {

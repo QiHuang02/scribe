@@ -5,8 +5,9 @@ use std::path::Path;
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::*;
-use tantivy::{doc, Index, ReloadPolicy, TantivyDocument};
+use tantivy::{Index, ReloadPolicy, TantivyDocument, doc};
 use thiserror::Error;
+use tokio::sync::RwLock;
 
 #[derive(Error, Debug)]
 pub enum SearchError {
@@ -44,8 +45,8 @@ pub struct SearchService {
     description_field: Field,
     tags_field: Field,
     category_field: Field,
-    search_stats: std::sync::RwLock<HashMap<String, usize>>,
-    recent_searches: std::sync::RwLock<Vec<SearchStats>>,
+    search_stats: RwLock<HashMap<String, usize>>,
+    recent_searches: RwLock<Vec<SearchStats>>,
 }
 
 impl SearchService {
@@ -72,7 +73,10 @@ impl SearchService {
             .reload_policy(ReloadPolicy::Manual)
             .try_into()?;
 
-        let query_parser = QueryParser::for_index(&index, vec![title_field, content_field, description_field, tags_field]);
+        let query_parser = QueryParser::for_index(
+            &index,
+            vec![title_field, content_field, description_field, tags_field],
+        );
 
         Ok(SearchService {
             index,
@@ -84,8 +88,8 @@ impl SearchService {
             description_field,
             tags_field,
             category_field,
-            search_stats: std::sync::RwLock::new(HashMap::new()),
-            recent_searches: std::sync::RwLock::new(Vec::new()),
+            search_stats: RwLock::new(HashMap::new()),
+            recent_searches: RwLock::new(Vec::new()),
         })
     }
 
@@ -102,7 +106,11 @@ impl SearchService {
         schema_builder.build()
     }
 
-    pub fn index_articles(&self, articles: &[ArticleContent], heap_size: usize) -> Result<(), SearchError> {
+    pub fn index_articles(
+        &self,
+        articles: &[ArticleContent],
+        heap_size: usize,
+    ) -> Result<(), SearchError> {
         let mut index_writer = self.index.writer(heap_size)?;
 
         index_writer.delete_all_documents()?;
@@ -205,11 +213,11 @@ impl SearchService {
     }
 
     fn record_search(&self, query: &str) {
-        if let Ok(mut stats) = self.search_stats.write() {
+        if let Ok(mut stats) = self.search_stats.try_write() {
             *stats.entry(query.to_string()).or_insert(0) += 1;
         }
 
-        if let Ok(mut recent) = self.recent_searches.write() {
+        if let Ok(mut recent) = self.recent_searches.try_write() {
             let search_stat = SearchStats {
                 query: query.to_string(),
                 count: 1,
@@ -225,10 +233,9 @@ impl SearchService {
     }
 
     pub fn get_popular_searches(&self, limit: usize) -> Vec<(String, usize)> {
-        if let Ok(stats) = self.search_stats.read() {
-            let mut popular: Vec<(String, usize)> = stats.iter()
-                .map(|(k, v)| (k.clone(), *v))
-                .collect();
+        if let Ok(stats) = self.search_stats.try_read() {
+            let mut popular: Vec<(String, usize)> =
+                stats.iter().map(|(k, v)| (k.clone(), *v)).collect();
 
             popular.sort_by(|a, b| b.1.cmp(&a.1));
             popular.into_iter().take(limit).collect()
