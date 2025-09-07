@@ -82,7 +82,7 @@ pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
         .with_state(app_state);
 
     let addr: SocketAddr = config.server_addr.parse().expect("Invalid server address");
-    info!("Starting server on {}", addr);
+    info!("Starting server on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }

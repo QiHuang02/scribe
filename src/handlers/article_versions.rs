@@ -15,10 +15,10 @@ use std::time::SystemTime;
 
 pub fn create_router() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/api/articles/:id/versions", get(list_versions))
-        .route("/api/articles/:id/versions/:version", get(get_version))
+        .route("/api/articles/{id}/versions", get(list_versions))
+        .route("/api/articles/{id}/versions/{version}", get(get_version))
         .route(
-            "/api/articles/:id/versions/:version/restore",
+            "/api/articles/{id}/versions/{version}/restore",
             post(restore_version),
         )
 }
