@@ -1,5 +1,6 @@
 use crate::handlers::error::LoadError;
 use crate::models::article::{Article, ArticleContent, Metadata};
+use chrono::{DateTime, Utc};
 use gray_matter::engine::YAML;
 use gray_matter::Matter;
 use serde_yaml::from_value;
@@ -355,10 +356,17 @@ impl ArticleStore {
         let last_modified = fs::metadata(path)
             .and_then(|m| m.modified())
             .unwrap_or(SystemTime::UNIX_EPOCH);
+        let updated_at: DateTime<Utc> = last_modified.into();
+        let version_dir = format!("data/articles/{}/versions", slug);
+        let version = fs::read_dir(&version_dir)
+            .map(|rd| rd.count() as u32 + 1)
+            .unwrap_or(1);
 
         articles.push(Article {
             slug,
             metadata,
+            version,
+            updated_at,
             file_path: path.to_string_lossy().to_string(),
             last_modified,
         });

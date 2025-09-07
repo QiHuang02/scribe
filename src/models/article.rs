@@ -21,6 +21,8 @@ pub struct Metadata {
 pub struct Article {
     pub slug: String,
     pub metadata: Metadata,
+    pub version: u32,
+    pub updated_at: DateTime<Utc>,
     #[serde(skip_serializing)]
     pub file_path: String,
     #[serde(skip_serializing)]

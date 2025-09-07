@@ -9,6 +9,7 @@ use std::io::Error as IoError;
 pub enum AppError {
     NotFound(String),
     BadRequest(String),
+    InternalServerError(String),
 }
 
 impl IntoResponse for AppError {
@@ -16,6 +17,7 @@ impl IntoResponse for AppError {
         let (status, error_message) = match self {
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
+            AppError::InternalServerError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         };
 
         let body = Json(json!({
