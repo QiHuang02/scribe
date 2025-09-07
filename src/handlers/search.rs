@@ -1,4 +1,4 @@
-use crate::handlers::error::AppError;
+use crate::handlers::error::{AppError, ERR_EMPTY_SEARCH_QUERY, ERR_FULLTEXT_DISABLED};
 use crate::server::app::AppState;
 use crate::services::search::SearchResult;
 use axum::extract::{Query, State};
@@ -46,15 +46,19 @@ async fn search_articles(
     let search_service = state
         .search_service
         .as_ref()
-        .ok_or_else(|| AppError::BadRequest("Full-text search is not enabled".to_string()))?;
+        .ok_or_else(|| AppError::BadRequest {
+            code: ERR_FULLTEXT_DISABLED,
+            message: "Full-text search is not enabled".to_string(),
+        })?;
 
     let limit = params.limit.unwrap_or(20);
     let highlights = params.highlights.unwrap_or(true);
 
     if params.q.trim().is_empty() {
-        return Err(AppError::BadRequest(
-            "Search query cannot be empty".to_string(),
-        ));
+        return Err(AppError::BadRequest {
+            code: ERR_EMPTY_SEARCH_QUERY,
+            message: "Search query cannot be empty".to_string(),
+        });
     }
 
     match search_service.search(&params.q, limit, highlights) {
@@ -119,7 +123,10 @@ async fn get_popular_searches(
     let search_service = state
         .search_service
         .as_ref()
-        .ok_or_else(|| AppError::BadRequest("Full-text search is not enabled".to_string()))?;
+        .ok_or_else(|| AppError::BadRequest {
+            code: ERR_FULLTEXT_DISABLED,
+            message: "Full-text search is not enabled".to_string(),
+        })?;
 
     let popular_searches = search_service.get_popular_searches(10);
     let searches: Vec<PopularSearch> = popular_searches

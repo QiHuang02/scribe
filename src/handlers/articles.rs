@@ -1,4 +1,4 @@
-use crate::handlers::error::AppError;
+use crate::handlers::error::{AppError, ERR_ARTICLE_NOT_FOUND, ERR_BAD_REQUEST};
 use crate::models::article::{
     ArticleContent, ArticleRepresentation, ArticleTeaser, PaginatedArticles,
 };
@@ -148,20 +148,23 @@ async fn get_article_by_slug(
         Some(article) if !article.metadata.draft => {
             let content = store
                 .load_content_for(article)
-                .map_err(|e| AppError::BadRequest(e.to_string()))?;
+                .map_err(|e| AppError::BadRequest {
+                    code: ERR_BAD_REQUEST,
+                    message: e.to_string(),
+                })?;
             Ok(Json(ArticleContent {
                 slug: article.slug.clone(),
                 metadata: article.metadata.clone(),
                 content,
             }))
         }
-        Some(_) => Err(AppError::NotFound(format!(
-            "Article with slug {} not found",
-            slug
-        ))),
-        None => Err(AppError::NotFound(format!(
-            "Article with slug {} not found",
-            slug
-        ))),
+        Some(_) => Err(AppError::NotFound {
+            code: ERR_ARTICLE_NOT_FOUND,
+            message: format!("Article with slug {} not found", slug),
+        }),
+        None => Err(AppError::NotFound {
+            code: ERR_ARTICLE_NOT_FOUND,
+            message: format!("Article with slug {} not found", slug),
+        }),
     }
 }

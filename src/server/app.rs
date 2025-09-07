@@ -2,7 +2,10 @@ use crate::config::Config;
 use crate::server::cache::ResponseCacheLayer;
 use crate::services::search::SearchService;
 use crate::services::service::ArticleStore;
-use axum::Router;
+use axum::body::Body;
+use axum::middleware::{self, Next};
+use axum::response::Response;
+use axum::{Router, http::Request};
 use moka2::future::Cache;
 use notify::{RecursiveMode, Watcher};
 use std::net::SocketAddr;
@@ -10,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{error, info};
 
 pub struct AppState {
     pub store: Arc<RwLock<ArticleStore>>,
@@ -74,6 +77,7 @@ pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
         .merge(crate::handlers::tags::create_router())
         .merge(crate::handlers::categories::create_router())
         .merge(crate::handlers::search::create_router())
+        .layer(middleware::from_fn(log_errors))
         .layer(ResponseCacheLayer::new(app_state.cache.clone()))
         .with_state(app_state);
 
@@ -81,6 +85,14 @@ pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
     info!("Starting server on {}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn log_errors(req: Request<Body>, next: Next) -> Response {
+    let res = next.run(req).await;
+    if res.status().is_server_error() {
+        error!("Internal server error: {}", res.status());
+    }
+    res
 }
 
 async fn watch_articles(state: Arc<AppState>) {

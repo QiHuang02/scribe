@@ -1,4 +1,6 @@
-use crate::handlers::error::AppError;
+use crate::handlers::error::{
+    AppError, ERR_ARTICLE_NOT_FOUND, ERR_INTERNAL_SERVER, ERR_VERSION_NOT_FOUND,
+};
 use crate::models::version::VersionRecord;
 use crate::server::app::AppState;
 use crate::services::article_service::save_version;
@@ -21,18 +23,21 @@ pub fn create_router() -> Router<Arc<AppState>> {
         )
 }
 
-async fn list_versions(
-    Path(id): Path<String>,
-) -> Result<Json<Vec<VersionRecord>>, AppError> {
+async fn list_versions(Path(id): Path<String>) -> Result<Json<Vec<VersionRecord>>, AppError> {
     let version_dir = format!("data/articles/{}/versions", id);
     if !StdPath::new(&version_dir).exists() {
         return Ok(Json(vec![]));
     }
     let mut records = Vec::new();
-    let entries = fs::read_dir(&version_dir)
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+    let entries = fs::read_dir(&version_dir).map_err(|e| AppError::InternalServerError {
+        code: ERR_INTERNAL_SERVER,
+        message: e.to_string(),
+    })?;
     for entry in entries {
-        let entry = entry.map_err(|e| AppError::InternalServerError(e.to_string()))?;
+        let entry = entry.map_err(|e| AppError::InternalServerError {
+            code: ERR_INTERNAL_SERVER,
+            message: e.to_string(),
+        })?;
         let file_name = entry.file_name();
         let file_name = file_name.to_string_lossy();
         if let Some(num_str) = file_name.strip_suffix(".md") {
@@ -62,13 +67,20 @@ async fn get_version(
     Path((id, version)): Path<(String, u32)>,
 ) -> Result<Json<VersionRecord>, AppError> {
     let path = format!("data/articles/{}/versions/{}.md", id, version);
-    let content = fs::read_to_string(&path)
-        .map_err(|_| AppError::NotFound("Version not found".to_string()))?;
-    let metadata = fs::metadata(&path)
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+    let content = fs::read_to_string(&path).map_err(|_| AppError::NotFound {
+        code: ERR_VERSION_NOT_FOUND,
+        message: "Version not found".to_string(),
+    })?;
+    let metadata = fs::metadata(&path).map_err(|e| AppError::InternalServerError {
+        code: ERR_INTERNAL_SERVER,
+        message: e.to_string(),
+    })?;
     let modified = metadata
         .modified()
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+        .map_err(|e| AppError::InternalServerError {
+            code: ERR_INTERNAL_SERVER,
+            message: e.to_string(),
+        })?;
     let timestamp: DateTime<Utc> = modified.into();
     Ok(Json(VersionRecord {
         article_id: id,
@@ -84,16 +96,23 @@ async fn restore_version(
     Path((id, version)): Path<(String, u32)>,
 ) -> Result<Json<VersionRecord>, AppError> {
     let store = state.store.read().await;
-    let article = store
-        .get_by_slug(&id)
-        .ok_or_else(|| AppError::NotFound("Article not found".to_string()))?;
+    let article = store.get_by_slug(&id).ok_or_else(|| AppError::NotFound {
+        code: ERR_ARTICLE_NOT_FOUND,
+        message: "Article not found".to_string(),
+    })?;
     let version_path = format!("data/articles/{}/versions/{}.md", id, version);
-    let content = fs::read_to_string(&version_path)
-        .map_err(|_| AppError::NotFound("Version not found".to_string()))?;
-    fs::write(&article.file_path, &content)
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
-    save_version(article)
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+    let content = fs::read_to_string(&version_path).map_err(|_| AppError::NotFound {
+        code: ERR_VERSION_NOT_FOUND,
+        message: "Version not found".to_string(),
+    })?;
+    fs::write(&article.file_path, &content).map_err(|e| AppError::InternalServerError {
+        code: ERR_INTERNAL_SERVER,
+        message: e.to_string(),
+    })?;
+    save_version(article).map_err(|e| AppError::InternalServerError {
+        code: ERR_INTERNAL_SERVER,
+        message: e.to_string(),
+    })?;
     let timestamp = Utc::now();
     Ok(Json(VersionRecord {
         article_id: id,
