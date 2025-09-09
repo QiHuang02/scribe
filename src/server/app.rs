@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::server::cache::ResponseCacheLayer;
+use crate::server::cache::{CachedResponse, ResponseCacheLayer};
 use crate::services::search::SearchService;
 use crate::services::service::ArticleStore;
 use axum::body::Body;
@@ -21,7 +21,7 @@ pub struct AppState {
     pub store: Arc<RwLock<ArticleStore>>,
     pub config: Arc<Config>,
     pub search_service: Option<Arc<SearchService>>,
-    pub cache: Arc<Cache<String, String>>,
+    pub cache: Arc<Cache<String, CachedResponse>>,
     pub cookie_key: Key,
 }
 
