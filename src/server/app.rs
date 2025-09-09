@@ -73,14 +73,20 @@ pub fn start_file_watcher(app_state: Arc<AppState>) {
 }
 
 pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
-    let app = Router::new()
+    let mut app = Router::new()
         .merge(crate::handlers::articles::create_router())
         .merge(crate::handlers::article_versions::create_router())
         .merge(crate::handlers::tags::create_router())
         .merge(crate::handlers::categories::create_router())
         .merge(crate::handlers::search::create_router())
         .merge(crate::handlers::auth::create_router())
-        .merge(crate::handlers::sitemap::create_router())
+        .merge(crate::handlers::sitemap::create_router());
+
+    if config.enable_comments {
+        app = app.merge(crate::handlers::comments::create_router());
+    }
+
+    let app = app
         .layer(middleware::from_fn(log_errors))
         .layer(ResponseCacheLayer::new(app_state.cache.clone()))
         .with_state(app_state);

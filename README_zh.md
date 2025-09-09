@@ -12,12 +12,13 @@ log_level = "scribe=debug,tower_http=debug"
 server_addr = "127.0.0.1:3000"
 latest_articles_count = 10
 enable_nested_categories = true
+enable_comments = false
 cache_max_capacity = 1000
 cache_ttl_seconds = 60
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"
 ```
 
-服务器会监视 `article_dir` 的变化并自动重新加载被修改的文件。可选的全文搜索可以通过 `enable_full_text_search` 启用。
+服务器会监视 `article_dir` 的变化并自动重新加载被修改的文件。可选的全文搜索可以通过 `enable_full_text_search` 启用。评论端点和小部件默认关闭，除非将 `enable_comments` 设置为 `true`。
 
 ## 错误码
 
