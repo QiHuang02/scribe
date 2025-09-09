@@ -25,8 +25,23 @@ pub fn create_router() -> Router<Arc<AppState>> {
         )
 }
 
-async fn list_versions(Path(id): Path<String>) -> Result<Json<Vec<VersionRecord>>, AppError> {
-    let version_dir = format!("data/articles/{}/versions", id);
+async fn list_versions(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<VersionRecord>>, AppError> {
+    let store = state.store.read().await;
+    let article = store.get_by_slug(&id).ok_or_else(|| AppError::NotFound {
+        code: ERR_ARTICLE_NOT_FOUND,
+        message: "Article not found".to_string(),
+    })?;
+    if article.metadata.draft {
+        return Err(AppError::NotFound {
+            code: ERR_ARTICLE_NOT_FOUND,
+            message: "Article not found".to_string(),
+        });
+    }
+    let slug = article.slug.clone();
+    let version_dir = format!("data/articles/{}/versions", slug);
     if !StdPath::new(&version_dir).exists() {
         return Ok(Json(vec![]));
     }
@@ -52,7 +67,7 @@ async fn list_versions(Path(id): Path<String>) -> Result<Json<Vec<VersionRecord>
                     .unwrap_or(SystemTime::UNIX_EPOCH);
                 let timestamp: DateTime<Utc> = modified.into();
                 records.push(VersionRecord {
-                    article_id: id.clone(),
+                    article_id: slug.clone(),
                     version: ver,
                     content,
                     timestamp,
@@ -66,9 +81,22 @@ async fn list_versions(Path(id): Path<String>) -> Result<Json<Vec<VersionRecord>
 }
 
 async fn get_version(
+    State(state): State<Arc<AppState>>,
     Path((id, version)): Path<(String, u32)>,
 ) -> Result<Json<VersionRecord>, AppError> {
-    let path = format!("data/articles/{}/versions/{}.md", id, version);
+    let store = state.store.read().await;
+    let article = store.get_by_slug(&id).ok_or_else(|| AppError::NotFound {
+        code: ERR_ARTICLE_NOT_FOUND,
+        message: "Article not found".to_string(),
+    })?;
+    if article.metadata.draft {
+        return Err(AppError::NotFound {
+            code: ERR_ARTICLE_NOT_FOUND,
+            message: "Article not found".to_string(),
+        });
+    }
+    let slug = article.slug.clone();
+    let path = format!("data/articles/{}/versions/{}.md", slug, version);
     let content = fs::read_to_string(&path).map_err(|_| AppError::NotFound {
         code: ERR_VERSION_NOT_FOUND,
         message: "Version not found".to_string(),
@@ -85,7 +113,7 @@ async fn get_version(
         })?;
     let timestamp: DateTime<Utc> = modified.into();
     Ok(Json(VersionRecord {
-        article_id: id,
+        article_id: slug,
         version,
         content,
         timestamp,
