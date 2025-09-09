@@ -1,10 +1,11 @@
 use crate::handlers::error::{AppError, ERR_INTERNAL_SERVER, ERR_UNAUTHORIZED};
 use crate::server::app::AppState;
-use axum::extract::{Query, State};
+use axum::extract::{FromRef, Query, State};
 use axum::response::Redirect;
 use axum::routing::get;
 use axum::{Json, Router};
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use axum_extra::extract::cookie::{Cookie, SameSite, SignedCookieJar};
+use cookie::Key;
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::async_http_client;
 use oauth2::{
@@ -14,6 +15,23 @@ use oauth2::{
 use reqwest::header::USER_AGENT;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+#[derive(Clone)]
+struct CookieKey(Key);
+
+impl FromRef<Arc<AppState>> for CookieKey {
+    fn from_ref(app: &Arc<AppState>) -> Self {
+        CookieKey(app.cookie_key.clone())
+    }
+}
+
+impl Into<Key> for CookieKey {
+    fn into(self) -> Key {
+        self.0
+    }
+}
+
+type SignedJar = SignedCookieJar<CookieKey>;
 
 pub fn create_router() -> Router<Arc<AppState>> {
     Router::new()
@@ -31,7 +49,7 @@ fn oauth_client(state: &AppState) -> BasicClient {
     .set_redirect_uri(RedirectUrl::new(state.config.github_redirect_url.clone()).unwrap())
 }
 
-async fn github_login(State(state): State<Arc<AppState>>, jar: CookieJar) -> (CookieJar, Redirect) {
+async fn github_login(State(state): State<Arc<AppState>>, jar: SignedJar) -> (SignedJar, Redirect) {
     let client = oauth_client(&state);
     let (auth_url, csrf_token) = client
         .authorize_url(CsrfToken::new_random)
@@ -65,9 +83,9 @@ struct GitHubUser {
 
 async fn github_callback(
     State(state): State<Arc<AppState>>,
-    jar: CookieJar,
+    jar: SignedJar,
     Query(query): Query<AuthRequest>,
-) -> Result<(CookieJar, Json<GitHubUser>), AppError> {
+) -> Result<(SignedJar, Json<GitHubUser>), AppError> {
     let state_cookie = jar.get("oauth_state").ok_or(AppError::Unauthorized {
         code: ERR_UNAUTHORIZED,
         message: "missing oauth state".to_string(),

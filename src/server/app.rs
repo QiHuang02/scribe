@@ -5,14 +5,16 @@ use crate::services::service::ArticleStore;
 use axum::body::Body;
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use axum::{Router, http::Request};
+use axum::{http::Request, Router};
+use cookie::Key;
 use moka2::future::Cache;
 use notify::{RecursiveMode, Watcher};
+use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
 use tokio::sync::mpsc;
+use tokio::sync::RwLock;
 use tracing::{error, info};
 
 pub struct AppState {
@@ -20,6 +22,7 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub search_service: Option<Arc<SearchService>>,
     pub cache: Arc<Cache<String, String>>,
+    pub cookie_key: Key,
 }
 
 pub async fn create_app_state(
@@ -52,11 +55,16 @@ pub async fn create_app_state(
         None
     };
 
+    let cookie_secret = env::var("COOKIE_SECRET")
+        .map_err(|_| "COOKIE_SECRET environment variable must be set")?;
+    let cookie_key = Key::derive_from(cookie_secret.as_bytes());
+
     Ok(Arc::new(AppState {
         store: Arc::new(RwLock::new(article_store)),
         config: Arc::clone(config),
         search_service,
         cache: Arc::new(cache),
+        cookie_key,
     }))
 }
 
