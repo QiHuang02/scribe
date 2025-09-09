@@ -73,7 +73,9 @@ pub fn start_file_watcher(app_state: Arc<AppState>) {
 pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
     let app = Router::new()
         .merge(crate::handlers::articles::create_router())
-        .merge(crate::handlers::article_versions::create_router())
+        .merge(crate::handlers::article_versions::create_router(
+            app_state.clone(),
+        ))
         .merge(crate::handlers::tags::create_router())
         .merge(crate::handlers::categories::create_router())
         .merge(crate::handlers::search::create_router())

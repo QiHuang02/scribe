@@ -15,13 +15,13 @@ use std::path::Path as StdPath;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-pub fn create_router() -> Router<Arc<AppState>> {
+pub fn create_router(state: Arc<AppState>) -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/articles/{id}/versions", get(list_versions))
         .route("/api/articles/{id}/versions/{version}", get(get_version))
         .route(
             "/api/articles/{id}/versions/{version}/restore",
-            post(restore_version).route_layer(middleware::from_fn(require_admin)),
+            post(restore_version).route_layer(middleware::from_fn_with_state(state, require_admin)),
         )
 }
 
