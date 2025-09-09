@@ -5,6 +5,4 @@ latest_articles_count = 10
 enable_nested_categories = true
 cache_max_capacity = 1000
 cache_ttl_seconds = 60
-github_client_id = "your-client-id"
-github_client_secret = "your-client-secret"
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"

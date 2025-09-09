@@ -16,8 +16,6 @@ pub struct Config {
     pub latest_articles_count: usize,
     #[serde(default)]
     pub enable_nested_categories: bool,
-    pub github_client_id: String,
-    pub github_client_secret: String,
     pub github_redirect_url: String,
     #[serde(default = "default_search_index_dir")]
     pub search_index_dir: String,
@@ -69,14 +67,6 @@ impl Config {
             return Err("Cache TTL must be greater than 0".to_string());
         }
 
-        if self.github_client_id.trim().is_empty() {
-            return Err("GitHub client ID cannot be empty".to_string());
-        }
-
-        if self.github_client_secret.trim().is_empty() {
-            return Err("GitHub client secret cannot be empty".to_string());
-        }
-
         if self.github_redirect_url.trim().is_empty() {
             return Err("GitHub redirect URL cannot be empty".to_string());
         }
@@ -112,12 +102,17 @@ pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
 }
 
 pub fn initialize_config() -> Result<Arc<Config>, Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok();
     let config = load_config()?;
     config
         .validate()
         .map_err(|e| format!("Configuration validation failed: {}", e))?;
     env::var("ADMIN_TOKEN_HASH")
         .map_err(|_| "ADMIN_TOKEN_HASH environment variable must be set")?;
+    env::var("GITHUB_CLIENT_ID")
+        .map_err(|_| "GITHUB_CLIENT_ID environment variable must be set")?;
+    env::var("GITHUB_CLIENT_SECRET")
+        .map_err(|_| "GITHUB_CLIENT_SECRET environment variable must be set")?;
     Ok(Arc::new(config))
 }
 
@@ -131,6 +126,16 @@ pub fn get_admin_token_hash() -> Result<[u8; 32], Box<dyn std::error::Error>> {
     let mut arr = [0u8; 32];
     arr.copy_from_slice(&bytes);
     Ok(arr)
+}
+
+pub fn get_github_client_id() -> Result<String, Box<dyn std::error::Error>> {
+    env::var("GITHUB_CLIENT_ID")
+        .map_err(|_| "GITHUB_CLIENT_ID environment variable must be set".into())
+}
+
+pub fn get_github_client_secret() -> Result<String, Box<dyn std::error::Error>> {
+    env::var("GITHUB_CLIENT_SECRET")
+        .map_err(|_| "GITHUB_CLIENT_SECRET environment variable must be set".into())
 }
 
 pub fn initialize_logging(config: &Config) {
