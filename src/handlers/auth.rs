@@ -1,7 +1,8 @@
-use crate::handlers::error::{AppError, ERR_INTERNAL_SERVER};
+use crate::handlers::error::{AppError, ERR_INTERNAL_SERVER, ERR_UNAUTHORIZED};
 use crate::server::app::AppState;
 use axum::extract::{Query, State};
 use axum::response::Redirect;
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use axum::routing::get;
 use axum::{Json, Router};
 use oauth2::basic::BasicClient;
@@ -37,13 +38,22 @@ fn oauth_client(state: &AppState) -> BasicClient {
     )
 }
 
-async fn github_login(State(state): State<Arc<AppState>>) -> Redirect {
+async fn github_login(State(state): State<Arc<AppState>>, jar: CookieJar) -> (CookieJar, Redirect) {
     let client = oauth_client(&state);
-    let (auth_url, _csrf_token) = client
+    let (auth_url, csrf_token) = client
         .authorize_url(CsrfToken::new_random)
         .add_scope(Scope::new("read:user".to_string()))
         .url();
-    Redirect::to(auth_url.as_str())
+
+    let jar = jar.add(
+        Cookie::build(("oauth_state", csrf_token.secret().to_string()))
+            .http_only(true)
+            .same_site(SameSite::Lax)
+            .secure(true)
+            .build(),
+    );
+
+    (jar, Redirect::to(auth_url.as_str()))
 }
 
 #[derive(Deserialize)]
@@ -60,8 +70,25 @@ struct GitHubUser {
 
 async fn github_callback(
     State(state): State<Arc<AppState>>,
+    jar: CookieJar,
     Query(query): Query<AuthRequest>,
-) -> Result<Json<GitHubUser>, AppError> {
+) -> Result<(CookieJar, Json<GitHubUser>), AppError> {
+    let state_cookie = jar
+        .get("oauth_state")
+        .ok_or(AppError::Unauthorized {
+            code: ERR_UNAUTHORIZED,
+            message: "missing oauth state".to_string(),
+        })?;
+
+    if state_cookie.value() != query.state {
+        return Err(AppError::Unauthorized {
+            code: ERR_UNAUTHORIZED,
+            message: "invalid oauth state".to_string(),
+        });
+    }
+
+    let jar = jar.remove(Cookie::from("oauth_state"));
+
     let client = oauth_client(&state);
     let token = client
         .exchange_code(AuthorizationCode::new(query.code))
@@ -89,5 +116,5 @@ async fn github_callback(
             message: e.to_string(),
         })?;
 
-    Ok(Json(user))
+    Ok((jar, Json(user)))
 }
