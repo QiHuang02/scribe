@@ -12,12 +12,18 @@ use tower::{Layer, Service};
 const CACHE_BYPASS_PATHS: &[&str] = &["/api/auth/"];
 
 #[derive(Clone)]
+pub struct CachedResponse {
+    pub body: String,
+    pub content_type: Option<String>,
+}
+
+#[derive(Clone)]
 pub struct ResponseCacheLayer {
-    cache: Arc<Cache<String, String>>,
+    cache: Arc<Cache<String, CachedResponse>>,
 }
 
 impl ResponseCacheLayer {
-    pub fn new(cache: Arc<Cache<String, String>>) -> Self {
+    pub fn new(cache: Arc<Cache<String, CachedResponse>>) -> Self {
         Self { cache }
     }
 }
@@ -36,7 +42,7 @@ impl<S> Layer<S> for ResponseCacheLayer {
 #[derive(Clone)]
 pub struct ResponseCacheService<S> {
     inner: S,
-    cache: Arc<Cache<String, String>>,
+    cache: Arc<Cache<String, CachedResponse>>,
 }
 
 impl<S> Service<Request<Body>> for ResponseCacheService<S>
@@ -83,10 +89,12 @@ where
 
         Box::pin(async move {
             if let Some(cached) = cache.get(&cache_key).await {
-                let resp = Response::builder()
-                    .header(axum::http::header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(cached))
-                    .unwrap();
+                let CachedResponse { body, content_type } = cached;
+                let mut builder = Response::builder();
+                if let Some(ct) = content_type {
+                    builder = builder.header(axum::http::header::CONTENT_TYPE, ct);
+                }
+                let resp = builder.body(Body::from(body)).unwrap();
                 return Ok(resp);
             }
 
@@ -96,7 +104,20 @@ where
             let body_str = String::from_utf8(bytes.to_vec()).unwrap();
 
             if parts.status.is_success() {
-                cache.insert(cache_key, body_str.clone()).await;
+                let content_type = parts
+                    .headers
+                    .get(axum::http::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string());
+                cache
+                    .insert(
+                        cache_key,
+                        CachedResponse {
+                            body: body_str.clone(),
+                            content_type,
+                        },
+                    )
+                    .await;
             }
 
             Ok(Response::from_parts(parts, Body::from(body_str)))
