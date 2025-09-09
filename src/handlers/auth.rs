@@ -2,9 +2,9 @@ use crate::handlers::error::{AppError, ERR_INTERNAL_SERVER, ERR_UNAUTHORIZED};
 use crate::server::app::AppState;
 use axum::extract::{Query, State};
 use axum::response::Redirect;
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use axum::routing::get;
 use axum::{Json, Router};
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::async_http_client;
 use oauth2::{
@@ -24,18 +24,11 @@ pub fn create_router() -> Router<Arc<AppState>> {
 fn oauth_client(state: &AppState) -> BasicClient {
     BasicClient::new(
         ClientId::new(state.config.github_client_id.clone()),
-        Some(ClientSecret::new(
-            state.config.github_client_secret.clone(),
-        )),
+        Some(ClientSecret::new(state.config.github_client_secret.clone())),
         AuthUrl::new("https://github.com/login/oauth/authorize".to_string()).unwrap(),
-        Some(TokenUrl::new(
-            "https://github.com/login/oauth/access_token".to_string(),
-        )
-        .unwrap()),
+        Some(TokenUrl::new("https://github.com/login/oauth/access_token".to_string()).unwrap()),
     )
-    .set_redirect_uri(
-        RedirectUrl::new(state.config.github_redirect_url.clone()).unwrap(),
-    )
+    .set_redirect_uri(RedirectUrl::new(state.config.github_redirect_url.clone()).unwrap())
 }
 
 async fn github_login(State(state): State<Arc<AppState>>, jar: CookieJar) -> (CookieJar, Redirect) {
@@ -45,11 +38,13 @@ async fn github_login(State(state): State<Arc<AppState>>, jar: CookieJar) -> (Co
         .add_scope(Scope::new("read:user".to_string()))
         .url();
 
+    let is_secure_cookie = state.config.github_redirect_url.starts_with("https://");
+
     let jar = jar.add(
         Cookie::build(("oauth_state", csrf_token.secret().to_string()))
             .http_only(true)
             .same_site(SameSite::Lax)
-            .secure(true)
+            .secure(is_secure_cookie)
             .build(),
     );
 
@@ -73,12 +68,10 @@ async fn github_callback(
     jar: CookieJar,
     Query(query): Query<AuthRequest>,
 ) -> Result<(CookieJar, Json<GitHubUser>), AppError> {
-    let state_cookie = jar
-        .get("oauth_state")
-        .ok_or(AppError::Unauthorized {
-            code: ERR_UNAUTHORIZED,
-            message: "missing oauth state".to_string(),
-        })?;
+    let state_cookie = jar.get("oauth_state").ok_or(AppError::Unauthorized {
+        code: ERR_UNAUTHORIZED,
+        message: "missing oauth state".to_string(),
+    })?;
 
     if state_cookie.value() != query.state {
         return Err(AppError::Unauthorized {
