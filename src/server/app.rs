@@ -5,7 +5,7 @@ use crate::services::service::ArticleStore;
 use axum::body::Body;
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use axum::{http::Request, Router};
+use axum::{Router, http::Request};
 use cookie::Key;
 use moka2::future::Cache;
 use notify::{RecursiveMode, Watcher};
@@ -13,8 +13,8 @@ use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
 use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 use tracing::{error, info};
 
 pub struct AppState {
@@ -55,8 +55,8 @@ pub async fn create_app_state(
         None
     };
 
-    let cookie_secret = env::var("COOKIE_SECRET")
-        .map_err(|_| "COOKIE_SECRET environment variable must be set")?;
+    let cookie_secret =
+        env::var("COOKIE_SECRET").map_err(|_| "COOKIE_SECRET environment variable must be set")?;
     let cookie_key = Key::derive_from(cookie_secret.as_bytes());
 
     Ok(Arc::new(AppState {
@@ -80,6 +80,7 @@ pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
         .merge(crate::handlers::categories::create_router())
         .merge(crate::handlers::search::create_router())
         .merge(crate::handlers::auth::create_router())
+        .merge(crate::handlers::sitemap::create_router())
         .layer(middleware::from_fn(log_errors))
         .layer(ResponseCacheLayer::new(app_state.cache.clone()))
         .with_state(app_state);
