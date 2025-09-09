@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::env;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
@@ -15,7 +16,6 @@ pub struct Config {
     pub latest_articles_count: usize,
     #[serde(default)]
     pub enable_nested_categories: bool,
-    pub admin_token: String,
     pub github_client_id: String,
     pub github_client_secret: String,
     pub github_redirect_url: String,
@@ -69,10 +69,6 @@ impl Config {
             return Err("Cache TTL must be greater than 0".to_string());
         }
 
-        if self.admin_token.trim().is_empty() {
-            return Err("Admin token cannot be empty".to_string());
-        }
-
         if self.github_client_id.trim().is_empty() {
             return Err("GitHub client ID cannot be empty".to_string());
         }
@@ -120,7 +116,21 @@ pub fn initialize_config() -> Result<Arc<Config>, Box<dyn std::error::Error>> {
     config
         .validate()
         .map_err(|e| format!("Configuration validation failed: {}", e))?;
+    env::var("ADMIN_TOKEN_HASH")
+        .map_err(|_| "ADMIN_TOKEN_HASH environment variable must be set")?;
     Ok(Arc::new(config))
+}
+
+pub fn get_admin_token_hash() -> Result<[u8; 32], Box<dyn std::error::Error>> {
+    let hash_hex = env::var("ADMIN_TOKEN_HASH")
+        .map_err(|_| "ADMIN_TOKEN_HASH environment variable must be set")?;
+    let bytes = hex::decode(hash_hex)?;
+    if bytes.len() != 32 {
+        return Err("ADMIN_TOKEN_HASH must be a 32-byte hex string".into());
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Ok(arr)
 }
 
 pub fn initialize_logging(config: &Config) {
