@@ -27,6 +27,8 @@ pub struct Article {
     pub file_path: String,
     #[serde(skip_serializing)]
     pub last_modified: SystemTime,
+    #[serde(skip_serializing, default)]
+    pub deleted: bool,
 }
 
 #[derive(Serialize, Debug, Clone)]

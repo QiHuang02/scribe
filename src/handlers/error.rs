@@ -14,12 +14,14 @@ pub const ERR_FULLTEXT_DISABLED: &str = "ERR_FULLTEXT_DISABLED";
 pub const ERR_EMPTY_SEARCH_QUERY: &str = "ERR_EMPTY_SEARCH_QUERY";
 #[allow(dead_code)]
 pub const ERR_INVALID_SESSION: &str = "ERR_INVALID_SESSION";
+pub const ERR_UNAUTHORIZED: &str = "ERR_UNAUTHORIZED";
 
 #[derive(Debug)]
 pub enum AppError {
     NotFound { code: &'static str, message: String },
     BadRequest { code: &'static str, message: String },
     InternalServerError { code: &'static str, message: String },
+    Unauthorized { code: &'static str, message: String },
 }
 
 impl IntoResponse for AppError {
@@ -30,6 +32,7 @@ impl IntoResponse for AppError {
             AppError::InternalServerError { code, message } => {
                 (StatusCode::INTERNAL_SERVER_ERROR, code, message)
             }
+            AppError::Unauthorized { code, message } => (StatusCode::UNAUTHORIZED, code, message),
         };
 
         error!(error_code = code, message = %message);

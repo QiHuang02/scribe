@@ -1,8 +1,8 @@
 use crate::handlers::error::LoadError;
 use crate::models::article::{Article, ArticleContent, Metadata};
 use chrono::{DateTime, Utc};
-use gray_matter::engine::YAML;
 use gray_matter::Matter;
+use gray_matter::engine::YAML;
 use serde_yaml::from_value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -45,11 +45,7 @@ impl ArticleStore {
                 &mut all_categories,
             )?;
         } else {
-            Self::load_articles_flat(
-                content_dir,
-                &mut articles,
-                &mut all_tags,
-            )?;
+            Self::load_articles_flat(content_dir, &mut articles, &mut all_tags)?;
         }
 
         articles.sort_by(|a, b| b.metadata.date.cmp(&a.metadata.date));
@@ -74,7 +70,11 @@ impl ArticleStore {
         })
     }
 
-    pub fn detect_file_changes(&self, content_dir: &str, enable_nested_categories: bool) -> Result<Vec<FileChangeInfo>, LoadError> {
+    pub fn detect_file_changes(
+        &self,
+        content_dir: &str,
+        enable_nested_categories: bool,
+    ) -> Result<Vec<FileChangeInfo>, LoadError> {
         let mut changes = Vec::new();
         let current_files = self.collect_all_files(content_dir, enable_nested_categories)?;
 
@@ -113,7 +113,11 @@ impl ArticleStore {
         Ok(changes)
     }
 
-    pub fn incremental_update(&mut self, content_dir: &str, enable_nested_categories: bool) -> Result<bool, LoadError> {
+    pub fn incremental_update(
+        &mut self,
+        content_dir: &str,
+        enable_nested_categories: bool,
+    ) -> Result<bool, LoadError> {
         let changes = self.detect_file_changes(content_dir, enable_nested_categories)?;
 
         if changes.is_empty() {
@@ -127,7 +131,9 @@ impl ArticleStore {
         for change in changes {
             match change.change_type {
                 FileChange::Added | FileChange::Modified => {
-                    if let Err(e) = self.update_single_article(&change.path, enable_nested_categories) {
+                    if let Err(e) =
+                        self.update_single_article(&change.path, enable_nested_categories)
+                    {
                         tracing::warn!("Failed to update article {}: {:?}", change.path, e);
                         continue;
                     }
@@ -149,7 +155,11 @@ impl ArticleStore {
         Ok(articles_changed)
     }
 
-    fn collect_all_files(&self, content_dir: &str, enable_nested_categories: bool) -> Result<HashSet<String>, LoadError> {
+    fn collect_all_files(
+        &self,
+        content_dir: &str,
+        enable_nested_categories: bool,
+    ) -> Result<HashSet<String>, LoadError> {
         let mut file_set = HashSet::new();
         if enable_nested_categories {
             self.collect_files_recursive(content_dir, &mut file_set)?;
@@ -159,36 +169,57 @@ impl ArticleStore {
         Ok(file_set)
     }
 
-    fn collect_files_flat(&self, content_dir: &str, file_set: &mut HashSet<String>) -> Result<(), LoadError> {
+    fn collect_files_flat(
+        &self,
+        content_dir: &str,
+        file_set: &mut HashSet<String>,
+    ) -> Result<(), LoadError> {
         let entries = fs::read_dir(Path::new(content_dir))?;
 
         for entry in entries {
             let path = entry?.path();
-            if path.is_file() && path.extension().is_some_and(|s| s == "md")
-                && let Some(path_str) = path.to_str() {
+            if path.is_file()
+                && path.extension().is_some_and(|s| s == "md")
+                && let Some(path_str) = path.to_str()
+            {
                 file_set.insert(path_str.to_string());
             }
         }
         Ok(())
     }
 
-    fn collect_files_recursive(&self, content_dir: &str, file_set: &mut HashSet<String>) -> Result<(), LoadError> {
+    fn collect_files_recursive(
+        &self,
+        content_dir: &str,
+        file_set: &mut HashSet<String>,
+    ) -> Result<(), LoadError> {
         for entry in WalkDir::new(content_dir).into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
-            if path.is_file() && path.extension().is_some_and(|s| s == "md")
-                && let Some(path_str) = path.to_str() {
+            if path.is_file()
+                && path.extension().is_some_and(|s| s == "md")
+                && let Some(path_str) = path.to_str()
+            {
                 file_set.insert(path_str.to_string());
             }
         }
         Ok(())
     }
 
-    fn update_single_article(&mut self, file_path: &str, enable_nested_categories: bool) -> Result<(), LoadError> {
+    fn update_single_article(
+        &mut self,
+        file_path: &str,
+        enable_nested_categories: bool,
+    ) -> Result<(), LoadError> {
         let path = Path::new(file_path);
 
         let category = if enable_nested_categories {
-            let content_dir = file_path.split('/').next().unwrap_or("")
-                .split('\\').next().unwrap_or("");
+            let content_dir = file_path
+                .split('/')
+                .next()
+                .unwrap_or("")
+                .split('\\')
+                .next()
+                .unwrap_or("");
             self.calculate_category_from_path(path, content_dir)
         } else {
             None
@@ -196,10 +227,19 @@ impl ArticleStore {
 
         let mut temp_articles = Vec::new();
         let mut temp_tags = HashSet::new();
-        Self::process_article_file(path, category.as_deref(), &mut temp_articles, &mut temp_tags)?;
+        Self::process_article_file(
+            path,
+            category.as_deref(),
+            &mut temp_articles,
+            &mut temp_tags,
+        )?;
 
         if let Some(new_article) = temp_articles.into_iter().next() {
-            if let Some(existing_index) = self.articles.iter().position(|a| a.slug == new_article.slug) {
+            if let Some(existing_index) = self
+                .articles
+                .iter()
+                .position(|a| a.slug == new_article.slug)
+            {
                 self.articles[existing_index] = new_article;
             } else {
                 self.articles.push(new_article);
@@ -217,33 +257,41 @@ impl ArticleStore {
     }
 
     fn remove_article_by_path(&mut self, file_path: &str) -> bool {
-        if let Some(index) = self.articles.iter().position(|a| a.file_path == file_path) {
-            let removed_article = self.articles.remove(index);
-            tracing::info!("Removed article: {}", removed_article.slug);
-
+        if let Some(article) = self.articles.iter_mut().find(|a| a.file_path == file_path) {
+            article.deleted = true;
+            self.slug_map.remove(&article.slug);
+            tracing::info!("Soft deleted article: {}", article.slug);
             return true;
         }
         false
     }
 
     fn rebuild_indexes(&mut self) {
-        self.articles.sort_by(|a, b| b.metadata.date.cmp(&a.metadata.date));
+        self.articles
+            .sort_by(|a, b| b.metadata.date.cmp(&a.metadata.date));
 
-        self.slug_map = self.articles
+        self.slug_map = self
+            .articles
             .iter()
             .enumerate()
+            .filter(|(_, a)| !a.deleted)
             .map(|(idx, article)| (article.slug.clone(), idx))
             .collect();
     }
 
-    fn update_file_cache(&mut self, content_dir: &str, enable_nested_categories: bool) -> Result<(), LoadError> {
+    fn update_file_cache(
+        &mut self,
+        content_dir: &str,
+        enable_nested_categories: bool,
+    ) -> Result<(), LoadError> {
         self.file_cache.clear();
 
         let current_files = self.collect_all_files(content_dir, enable_nested_categories)?;
 
         for file_path in current_files {
             if let Ok(metadata) = fs::metadata(&file_path)
-                && let Ok(modified_time) = metadata.modified() {
+                && let Ok(modified_time) = metadata.modified()
+            {
                 self.file_cache.insert(file_path, modified_time);
             }
         }
@@ -254,7 +302,8 @@ impl ArticleStore {
     fn calculate_category(path: &Path, base_path: &Path) -> Option<String> {
         if let Some(parent) = path.parent() {
             if parent != base_path {
-                parent.strip_prefix(base_path)
+                parent
+                    .strip_prefix(base_path)
                     .ok()
                     .and_then(|p| p.to_str())
                     .map(|s| s.replace(std::path::MAIN_SEPARATOR, "/"))
@@ -323,24 +372,24 @@ impl ArticleStore {
             .file_stem()
             .and_then(|s| s.to_str())
             .map(String::from)
-            .ok_or_else(|| LoadError::InvalidFileName(
-                path.to_string_lossy().to_string()
-            ))?;
+            .ok_or_else(|| LoadError::InvalidFileName(path.to_string_lossy().to_string()))?;
 
         let file_content = fs::read_to_string(path)?;
 
         let matter = Matter::<YAML>::new();
         let parsed_content = matter
             .parse::<serde_yaml::Value>(&file_content)
-            .map_err(|e| LoadError::MatterParse(
-                format!("Failed to parse front matter in {}: {}", path.to_string_lossy(), e)
-            ))?;
+            .map_err(|e| {
+                LoadError::MatterParse(format!(
+                    "Failed to parse front matter in {}: {}",
+                    path.to_string_lossy(),
+                    e
+                ))
+            })?;
 
         let data = parsed_content
             .data
-            .ok_or_else(|| LoadError::MissingFrontMatter(
-                path.to_string_lossy().to_string()
-            ))?;
+            .ok_or_else(|| LoadError::MissingFrontMatter(path.to_string_lossy().to_string()))?;
         let mut metadata: Metadata = from_value(data)?;
 
         if let Some(cat) = category {
@@ -369,6 +418,7 @@ impl ArticleStore {
             updated_at,
             file_path: path.to_string_lossy().to_string(),
             last_modified,
+            deleted: false,
         });
 
         Ok(())
@@ -387,7 +437,9 @@ impl ArticleStore {
     }
 
     pub fn get_by_slug(&self, slug: &str) -> Option<&Article> {
-        self.slug_map.get(slug).and_then(|&idx| self.articles.get(idx))
+        self.slug_map
+            .get(slug)
+            .and_then(|&idx| self.articles.get(idx))
     }
 
     pub fn query<F>(&self, filter: F) -> Vec<&Article>
@@ -396,7 +448,8 @@ impl ArticleStore {
     {
         self.articles
             .iter()
-            .filter(|&a| filter(a))
+            .filter(|a| !a.deleted)
+            .filter(|a| filter(a))
             .collect()
     }
 
@@ -415,9 +468,9 @@ impl ArticleStore {
     }
 
     pub fn load_full_articles(&self) -> Result<Vec<ArticleContent>, LoadError> {
-        self
-            .articles
+        self.articles
             .iter()
+            .filter(|a| !a.deleted)
             .map(|a| {
                 let content = self.load_content_for(a)?;
                 Ok(ArticleContent {
