@@ -2,11 +2,11 @@ use crate::config::{initialize_config, initialize_logging};
 use crate::server::app::{create_app_state, start_file_watcher, start_server};
 use std::sync::Arc;
 
-mod models;
-mod handlers;
-mod services;
 mod config;
+mod handlers;
+mod models;
 mod server;
+mod services;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
