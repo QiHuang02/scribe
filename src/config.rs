@@ -13,6 +13,7 @@ pub struct Config {
     pub article_dir: String,
     pub log_level: String,
     pub server_addr: String,
+    pub base_url: String,
     pub latest_articles_count: usize,
     #[serde(default)]
     pub enable_nested_categories: bool,
@@ -69,6 +70,10 @@ impl Config {
 
         if self.github_redirect_url.trim().is_empty() {
             return Err("GitHub redirect URL cannot be empty".to_string());
+        }
+
+        if self.base_url.trim().is_empty() {
+            return Err("Base URL cannot be empty".to_string());
         }
 
         Ok(())
