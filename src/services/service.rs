@@ -467,18 +467,26 @@ impl ArticleStore {
         Ok(parsed_content.content)
     }
 
-    pub fn load_full_articles(&self) -> Result<Vec<ArticleContent>, LoadError> {
-        self.articles
-            .iter()
-            .filter(|a| !a.deleted)
-            .map(|a| {
-                let content = self.load_content_for(a)?;
-                Ok(ArticleContent {
-                    slug: a.slug.clone(),
-                    metadata: a.metadata.clone(),
+    pub fn load_full_articles(&self) -> Vec<ArticleContent> {
+        let mut loaded = Vec::new();
+
+        for article in self.articles.iter().filter(|a| !a.deleted) {
+            match self.load_content_for(article) {
+                Ok(content) => loaded.push(ArticleContent {
+                    slug: article.slug.clone(),
+                    metadata: article.metadata.clone(),
                     content,
-                })
-            })
-            .collect()
+                }),
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to load content for article {}: {:?}",
+                        article.slug,
+                        e
+                    );
+                }
+            }
+        }
+
+        loaded
     }
 }
