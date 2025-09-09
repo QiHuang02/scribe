@@ -16,6 +16,9 @@ pub struct Config {
     #[serde(default)]
     pub enable_nested_categories: bool,
     pub admin_token: String,
+    pub github_client_id: String,
+    pub github_client_secret: String,
+    pub github_redirect_url: String,
     #[serde(default = "default_search_index_dir")]
     pub search_index_dir: String,
     #[serde(default)]
@@ -68,6 +71,18 @@ impl Config {
 
         if self.admin_token.trim().is_empty() {
             return Err("Admin token cannot be empty".to_string());
+        }
+
+        if self.github_client_id.trim().is_empty() {
+            return Err("GitHub client ID cannot be empty".to_string());
+        }
+
+        if self.github_client_secret.trim().is_empty() {
+            return Err("GitHub client secret cannot be empty".to_string());
+        }
+
+        if self.github_redirect_url.trim().is_empty() {
+            return Err("GitHub redirect URL cannot be empty".to_string());
         }
 
         Ok(())
