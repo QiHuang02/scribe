@@ -3,8 +3,10 @@ use crate::handlers::error::{
 };
 use crate::models::version::VersionRecord;
 use crate::server::app::AppState;
+use crate::server::auth::require_admin;
 use crate::services::article_service::save_version;
 use axum::extract::{Path, State};
+use axum::middleware;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
@@ -19,7 +21,7 @@ pub fn create_router() -> Router<Arc<AppState>> {
         .route("/api/articles/{id}/versions/{version}", get(get_version))
         .route(
             "/api/articles/{id}/versions/{version}/restore",
-            post(restore_version),
+            post(restore_version).route_layer(middleware::from_fn(require_admin)),
         )
 }
 

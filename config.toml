@@ -3,5 +3,6 @@ log_level = "scribe=debug,tower_http=debug"
 server_addr = "127.0.0.1:3000"
 latest_articles_count = 10
 enable_nested_categories = true
+admin_token = "change-me"
 cache_max_capacity = 1000
 cache_ttl_seconds = 60

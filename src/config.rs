@@ -15,6 +15,7 @@ pub struct Config {
     pub latest_articles_count: usize,
     #[serde(default)]
     pub enable_nested_categories: bool,
+    pub admin_token: String,
     #[serde(default = "default_search_index_dir")]
     pub search_index_dir: String,
     #[serde(default)]
@@ -63,6 +64,10 @@ impl Config {
 
         if self.cache_ttl_seconds == 0 {
             return Err("Cache TTL must be greater than 0".to_string());
+        }
+
+        if self.admin_token.trim().is_empty() {
+            return Err("Admin token cannot be empty".to_string());
         }
 
         Ok(())
