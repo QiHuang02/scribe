@@ -40,3 +40,7 @@ walkdir = "2.5.0"
 
 # 全文搜索
 tantivy = "0.25.0"
+
+# OAuth2 支持
+oauth2 = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

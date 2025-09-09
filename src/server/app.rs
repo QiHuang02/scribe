@@ -71,6 +71,7 @@ pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
         .merge(crate::handlers::tags::create_router())
         .merge(crate::handlers::categories::create_router())
         .merge(crate::handlers::search::create_router())
+        .merge(crate::handlers::auth::create_router())
         .layer(middleware::from_fn(log_errors))
         .layer(ResponseCacheLayer::new(app_state.cache.clone()))
         .with_state(app_state);
