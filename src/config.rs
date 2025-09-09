@@ -17,6 +17,8 @@ pub struct Config {
     pub latest_articles_count: usize,
     #[serde(default)]
     pub enable_nested_categories: bool,
+    #[serde(default)]
+    pub enable_comments: bool,
     pub github_redirect_url: String,
     #[serde(default = "default_search_index_dir")]
     pub search_index_dir: String,

@@ -13,6 +13,7 @@ log_level = "scribe=debug,tower_http=debug"
 server_addr = "127.0.0.1:3000"
 latest_articles_count = 10
 enable_nested_categories = true
+enable_comments = false
 cache_max_capacity = 1000
 cache_ttl_seconds = 60
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"
@@ -20,7 +21,8 @@ github_redirect_url = "http://localhost:3000/api/auth/github/callback"
 
 The server watches `article_dir` for changes and automatically reloads
 modified files. Optional full‑text search can be enabled with
-`enable_full_text_search`.
+`enable_full_text_search`. Comment endpoints and widgets remain disabled
+unless `enable_comments` is set to `true`.
 
 ## Error Codes
 

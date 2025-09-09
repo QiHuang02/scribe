@@ -2,6 +2,7 @@ pub mod article_versions;
 pub mod articles;
 pub mod auth;
 pub mod categories;
+pub mod comments;
 pub mod error;
 pub mod search;
 pub mod sitemap;
