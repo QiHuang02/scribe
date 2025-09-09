@@ -1,5 +1,6 @@
 use crate::handlers::error::{AppError, ERR_INTERNAL_SERVER, ERR_UNAUTHORIZED};
 use crate::server::app::AppState;
+use crate::config::{get_github_client_id, get_github_client_secret};
 use axum::extract::{FromRef, Query, State};
 use axum::response::Redirect;
 use axum::routing::get;
@@ -40,9 +41,12 @@ pub fn create_router() -> Router<Arc<AppState>> {
 }
 
 fn oauth_client(state: &AppState) -> BasicClient {
+    let client_id = get_github_client_id().expect("GITHUB_CLIENT_ID must be set");
+    let client_secret =
+        get_github_client_secret().expect("GITHUB_CLIENT_SECRET must be set");
     BasicClient::new(
-        ClientId::new(state.config.github_client_id.clone()),
-        Some(ClientSecret::new(state.config.github_client_secret.clone())),
+        ClientId::new(client_id),
+        Some(ClientSecret::new(client_secret)),
         AuthUrl::new("https://github.com/login/oauth/authorize".to_string()).unwrap(),
         Some(TokenUrl::new("https://github.com/login/oauth/access_token".to_string()).unwrap()),
     )

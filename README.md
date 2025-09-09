@@ -33,3 +33,11 @@ RUST_LOG=error cargo run
 Error logs can then be viewed in the console or collected by your preferred log
 aggregator.
 
+## Environment Variables
+
+The application reads the following values from the environment (or a `.env` file):
+
+- `ADMIN_TOKEN_HASH` – SHA-256 hash of the admin token used for admin‑only routes.
+- `GITHUB_CLIENT_ID` – OAuth client identifier for GitHub authentication.
+- `GITHUB_CLIENT_SECRET` – OAuth client secret for GitHub authentication.
+
