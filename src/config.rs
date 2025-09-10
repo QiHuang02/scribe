@@ -114,12 +114,10 @@ pub fn initialize_config() -> Result<Arc<Config>, Box<dyn std::error::Error>> {
     config
         .validate()
         .map_err(|e| format!("Configuration validation failed: {}", e))?;
-    env::var("ADMIN_TOKEN_HASH")
-        .map_err(|_| "ADMIN_TOKEN_HASH environment variable must be set")?;
-    env::var("GITHUB_CLIENT_ID")
-        .map_err(|_| "GITHUB_CLIENT_ID environment variable must be set")?;
-    env::var("GITHUB_CLIENT_SECRET")
-        .map_err(|_| "GITHUB_CLIENT_SECRET environment variable must be set")?;
+    // Validate required environment variables using their respective helpers
+    get_admin_token_hash()?;
+    get_github_client_id()?;
+    get_github_client_secret()?;
     Ok(Arc::new(config))
 }
 

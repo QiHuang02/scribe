@@ -1,4 +1,4 @@
-use crate::handlers::error::AppError;
+use crate::handlers::error::{AppError, ERR_INTERNAL_SERVER};
 use crate::server::app::AppState;
 use axum::Router;
 use axum::extract::State;
@@ -30,10 +30,11 @@ async fn get_sitemap(State(state): State<Arc<AppState>>) -> Result<Response, App
 
     xml.push_str("</urlset>");
 
-    let response = Response::builder()
+    Response::builder()
         .header(header::CONTENT_TYPE, "application/xml")
         .body(axum::body::Body::from(xml))
-        .unwrap();
-
-    Ok(response)
+        .map_err(|_| AppError::InternalServerError {
+            code: ERR_INTERNAL_SERVER,
+            message: "Failed to build sitemap response".to_string(),
+        })
 }
