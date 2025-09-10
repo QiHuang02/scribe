@@ -72,7 +72,10 @@ pub fn start_file_watcher(app_state: Arc<AppState>) {
     tokio::spawn(watch_articles(app_state));
 }
 
-pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
+pub async fn start_server(
+    app_state: Arc<AppState>,
+    config: &Config,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut app = Router::new()
         .merge(crate::handlers::articles::create_router())
         .merge(crate::handlers::article_versions::create_router())
@@ -91,10 +94,11 @@ pub async fn start_server(app_state: Arc<AppState>, config: &Config) {
         .layer(ResponseCacheLayer::new(app_state.cache.clone()))
         .with_state(app_state);
 
-    let addr: SocketAddr = config.server_addr.parse().expect("Invalid server address");
+    let addr: SocketAddr = config.server_addr.parse()?;
     info!("Starting server on http://{}", addr);
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
 }
 
 async fn log_errors(req: Request<Body>, next: Next) -> Response {
