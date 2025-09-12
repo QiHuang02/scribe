@@ -11,7 +11,6 @@ This project exposes a REST API for managing articles. Errors are returned in a 
 Runtime configuration is read from `config.toml`. Important options include:
 
 ```toml
-article_dir = "article"
 log_level = "scribe=debug,tower_http=debug"
 server_addr = "127.0.0.1:3000"
 latest_articles_count = 10
@@ -22,7 +21,9 @@ cache_ttl_seconds = 60
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"
 ```
 
-The server watches `article_dir` for changes and automatically reloads modified files. Optional full‑text search can be enabled with `enable_full_text_search`. Comment endpoints and widgets remain disabled unless `enable_comments` is set to `true`. The `github_redirect_url` and GitHub OAuth environment variables are only required when comments are enabled.
+Content is loaded from the fixed `article` and `notes` directories located at the backend root, and the server watches the `article` directory for changes, automatically reloading modified files. Optional full‑text search can be enabled with `enable_full_text_search`. Comment endpoints and widgets remain disabled unless `enable_comments` is set to `true`. The `github_redirect_url` and GitHub OAuth environment variables are only required when comments are enabled.
+
+If `base_url` is missing or empty, it defaults to `http://localhost:3000`.
 
 ### Error Codes
 

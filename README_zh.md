@@ -11,7 +11,6 @@
 运行时配置从 `config.toml` 读取。重要选项包括：
 
 ```toml
-article_dir = "article"
 log_level = "scribe=debug,tower_http=debug"
 server_addr = "127.0.0.1:3000"
 latest_articles_count = 10
@@ -22,7 +21,9 @@ cache_ttl_seconds = 60
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"
 ```
 
-服务器会监视 `article_dir` 的变化并自动重新加载被修改的文件。可选的全文搜索可以通过 `enable_full_text_search` 启用。评论端点和小部件默认关闭，除非将 `enable_comments` 设置为 `true`。只有在启用评论功能时才需要 `github_redirect_url` 和相关的 GitHub OAuth 环境变量。
+内容固定存放在后端根路径下的 `article` 与 `notes` 目录中，服务器会监视 `article` 目录的变化并自动重新加载被修改的文件。可选的全文搜索可以通过 `enable_full_text_search` 启用。评论端点和小部件默认关闭，除非将 `enable_comments` 设置为 `true`。只有在启用评论功能时才需要 `github_redirect_url` 和相关的 GitHub OAuth 环境变量。
+
+如果 `base_url` 缺失或为空字符串，将默认使用 `http://localhost:3000`。
 
 ### 错误码
 
