@@ -447,8 +447,19 @@ impl ArticleStore {
         let updated_at: DateTime<Utc> = last_modified.into();
         let version_dir = format!("{}/{}/versions", content_root, slug);
         let version = fs::read_dir(&version_dir)
-            .map(|rd| rd.count() as u32 + 1)
-            .unwrap_or(1);
+            .ok()
+            .and_then(|rd| {
+                rd.filter_map(|entry| {
+                    entry.ok().and_then(|e| {
+                        e.file_name()
+                            .to_string_lossy()
+                            .strip_suffix(".md")
+                            .and_then(|s| s.parse::<u64>().ok())
+                    })
+                })
+                .max()
+            })
+            .unwrap_or(0);
 
         articles.push(Article {
             slug,

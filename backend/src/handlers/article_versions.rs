@@ -58,7 +58,7 @@ async fn list_versions(
         let file_name = entry.file_name();
         let file_name = file_name.to_string_lossy();
         if let Some(num_str) = file_name.strip_suffix(".md") {
-            if let Ok(ver) = num_str.parse::<u32>() {
+            if let Ok(ver) = num_str.parse::<u64>() {
                 let path = entry.path();
                 let content = fs::read_to_string(&path).unwrap_or_default();
                 let metadata = entry.metadata().ok();
@@ -82,7 +82,7 @@ async fn list_versions(
 
 async fn get_version(
     State(state): State<Arc<AppState>>,
-    Path((id, version)): Path<(String, u32)>,
+    Path((id, version)): Path<(String, u64)>,
 ) -> Result<Json<VersionRecord>, AppError> {
     let store = state.store.read().await;
     let article = store.get_by_slug(&id).ok_or_else(|| AppError::NotFound {
@@ -123,7 +123,7 @@ async fn get_version(
 
 async fn restore_version(
     State(state): State<Arc<AppState>>,
-    Path((id, version)): Path<(String, u32)>,
+    Path((id, version)): Path<(String, u64)>,
 ) -> Result<Json<VersionRecord>, AppError> {
     let store = state.store.read().await;
     let article = store.get_by_slug(&id).ok_or_else(|| AppError::NotFound {
