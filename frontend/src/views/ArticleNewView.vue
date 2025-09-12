@@ -1,7 +1,7 @@
 <template>
   <el-card class="article-new">
-    <el-form :model="form" label-width="80px">
-      <el-form-item label="标题" required>
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+      <el-form-item label="标题" prop="title">
         <el-input v-model="form.title" placeholder="请输入标题" />
       </el-form-item>
 
@@ -44,7 +44,7 @@
         </el-select>
       </el-form-item>
 
-      <el-form-item label="内容">
+      <el-form-item label="内容" prop="content">
         <el-button size="small" @click="isPreview = !isPreview" style="margin-bottom: 10px">
           {{ isPreview ? '编辑' : '预览' }}
         </el-button>
@@ -77,6 +77,12 @@ const form = ref({
   content: ''
 })
 
+const formRef = ref()
+const rules = {
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  content: [{ required: true, message: '请输入内容', trigger: 'blur' }]
+}
+
 const isPreview = ref(false)
 const md = new MarkdownIt()
 const previewHTML = computed(() =>
@@ -105,6 +111,11 @@ onMounted(async () => {
 
 async function submit() {
   try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+  try {
     const token = localStorage.getItem('token')
     const res = await fetch('/api/articles', {
       method: 'POST',
@@ -114,8 +125,18 @@ async function submit() {
       },
       body: JSON.stringify(form.value)
     })
+    if (res.status === 401) {
+      ElMessage.error('请先登录')
+      return
+    }
+    if (res.status === 403) {
+      ElMessage.error('没有权限')
+      return
+    }
     if (!res.ok) {
-      throw new Error(await res.text())
+      const msg = await res.text()
+      ElMessage.error(msg || '发布失败')
+      return
     }
     ElMessage.success('发布成功')
   } catch (e) {
