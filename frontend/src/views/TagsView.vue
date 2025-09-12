@@ -1,6 +1,6 @@
 <template>
   <div class="tags">
-    <ul v-if="tags.length">
+    <ul v-if="!loading && tags.length">
       <li v-for="t in tags" :key="t">
         <router-link :to="{ name: 'home', query: { tag: t } }">{{ t }}</router-link>
       </li>
@@ -11,19 +11,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
+import useApi from '../composables/useApi'
 
-const tags = ref([])
-const error = ref('')
+const { data: tags, error, loading, request } = useApi([])
 
-onMounted(async () => {
-  try {
-    const res = await fetch('/api/tags')
-    if (!res.ok) throw new Error('Request failed')
-    tags.value = await res.json() || []
-  } catch (e) {
-    error.value = 'Failed to load'
-  }
+onMounted(() => {
+  request('/api/tags')
 })
 </script>
 
