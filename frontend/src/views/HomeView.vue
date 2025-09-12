@@ -12,19 +12,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watchEffect } from 'vue'
+import { useRoute } from 'vue-router'
 
 const articles = ref([])
 const error = ref('')
+const route = useRoute()
 
-onMounted(async () => {
+watchEffect(async () => {
   try {
-    const res = await fetch('/api/articles')
+    const params = new URLSearchParams()
+    if (route.query.tag) params.set('tag', route.query.tag)
+    if (route.query.category) params.set('category', route.query.category)
+    const query = params.toString()
+    const res = await fetch(`/api/articles${query ? `?${query}` : ''}`)
     if (!res.ok) throw new Error('Request failed')
     const data = await res.json()
     articles.value = data.articles || []
+    error.value = ''
   } catch (e) {
     error.value = 'Failed to load'
+    articles.value = []
   }
 })
 </script>

@@ -1,12 +1,26 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import ArticleView from '../views/ArticleView.vue'
+import ArticleVersionView from '../views/ArticleVersionView.vue'
+import CategoriesView from '../views/CategoriesView.vue'
+import TagsView from '../views/TagsView.vue'
+import SearchView from '../views/SearchView.vue'
 
 const routes = [
   {
     path: '/',
     name: 'home',
     component: HomeView
+  },
+  {
+    path: '/categories',
+    name: 'categories',
+    component: CategoriesView
+  },
+  {
+    path: '/tags',
+    name: 'tags',
+    component: TagsView
   },
   {
     path: '/about',
@@ -20,6 +34,16 @@ const routes = [
     path: '/articles/:slug',
     name: 'article',
     component: ArticleView
+  },
+  {
+    path: '/articles/:slug/versions/:version',
+    name: 'article-version',
+    component: ArticleVersionView
+  },
+  {
+    path: '/search',
+    name: 'search',
+    component: SearchView
   }
 ]
 
