@@ -308,7 +308,7 @@ async fn create_article(
     let article = Article {
         slug: slug.clone(),
         metadata: metadata.clone(),
-        version: 1,
+        version: Utc::now().timestamp_millis() as u64,
         updated_at: Utc::now(),
         file_path: file_path.to_string_lossy().to_string(),
         last_modified,
