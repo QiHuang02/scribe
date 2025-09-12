@@ -7,6 +7,6 @@ tags: ["rust", "axum"]
 draft: false
 ---
 
-# 你好，世界！
+Scribe
 
 这是我的第一篇文章正文。

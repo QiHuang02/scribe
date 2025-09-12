@@ -33,7 +33,7 @@ fn default_limit() -> usize {
 pub fn create_router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/notes", get(get_notes_list))
-        .route("/api/notes/*path", get(get_note_by_slug))
+        .route("/api/notes/{path}", get(get_note_by_slug))
 }
 
 async fn get_notes_list(

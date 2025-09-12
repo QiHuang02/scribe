@@ -2,7 +2,7 @@
   "name": "scribe-frontend",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.13.1",
+  "packageManager": "pnpm@10.15.1",
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",

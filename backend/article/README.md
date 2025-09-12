@@ -7,5 +7,7 @@
 
 ## 文章列表
 
-- [第一篇文章](first-post.md)
-- [Minecraft 记录](test_1/minecraft.md)
+Scribe
+
+[第一篇文章](first-post.md)
+[Minecraft 记录](test_1/minecraft.md)
