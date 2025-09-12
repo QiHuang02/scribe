@@ -374,6 +374,10 @@ impl ArticleStore {
             .map(String::from)
             .ok_or_else(|| LoadError::InvalidFileName(path.to_string_lossy().to_string()))?;
 
+        if slug.eq_ignore_ascii_case("readme") {
+            return Ok(());
+        }
+
         let file_content = fs::read_to_string(path)?;
 
         let matter = Matter::<YAML>::new();
