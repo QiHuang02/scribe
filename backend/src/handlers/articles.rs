@@ -183,13 +183,17 @@ async fn create_article(
     }
 
     let mut slug_candidate = base_slug.clone();
-    let store_read = state.store.read().await;
     let mut counter = 1;
-    while store_read.get_by_slug(&slug_candidate).is_some() {
+    while state
+        .store
+        .read()
+        .await
+        .get_by_slug(&slug_candidate)
+        .is_some()
+    {
         slug_candidate = format!("{}-{}", base_slug, counter);
         counter += 1;
     }
-    drop(store_read);
     let slug = slug_candidate;
 
     let metadata = Metadata {
