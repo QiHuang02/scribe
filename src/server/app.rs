@@ -77,6 +77,7 @@ pub async fn start_server(
     config: &Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut app = Router::new()
+        .merge(crate::handlers::root::create_router())
         .merge(crate::handlers::articles::create_router())
         .merge(crate::handlers::article_versions::create_router())
         .merge(crate::handlers::tags::create_router())

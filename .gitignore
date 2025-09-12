@@ -2,3 +2,5 @@
 
 Scribe设计架构（v0.3）.md
 .env
+frontend/node_modules
+frontend/dist
