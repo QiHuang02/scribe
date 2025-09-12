@@ -12,14 +12,14 @@
 </template>
 
 <script setup>
-import { ref, watchEffect } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 const articles = ref([])
 const error = ref('')
 const route = useRoute()
 
-watchEffect(async () => {
+const fetchArticles = async () => {
   try {
     const params = new URLSearchParams()
     if (route.query.tag) params.set('tag', route.query.tag)
@@ -34,5 +34,7 @@ watchEffect(async () => {
     error.value = 'Failed to load'
     articles.value = []
   }
-})
+}
+
+watch(() => route.query, fetchArticles, { immediate: true })
 </script>
