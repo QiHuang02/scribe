@@ -18,7 +18,7 @@ cache_ttl_seconds = 60
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"
 ```
 
-服务器会监视 `article_dir` 的变化并自动重新加载被修改的文件。可选的全文搜索可以通过 `enable_full_text_search` 启用。评论端点和小部件默认关闭，除非将 `enable_comments` 设置为 `true`。
+服务器会监视 `article_dir` 的变化并自动重新加载被修改的文件。可选的全文搜索可以通过 `enable_full_text_search` 启用。评论端点和小部件默认关闭，除非将 `enable_comments` 设置为 `true`。只有在启用评论功能时才需要 `github_redirect_url` 和相关的 GitHub OAuth 环境变量。
 
 ## 错误码
 
@@ -53,8 +53,8 @@ RUST_LOG=error cargo run
 应用从环境（或 `.env` 文件）读取以下值：
 
 - `ADMIN_TOKEN_HASH` – 管理员路由所用 token 的 SHA-256 哈希。
-- `GITHUB_CLIENT_ID` – GitHub 认证用的 OAuth client ID。
-- `GITHUB_CLIENT_SECRET` – GitHub 认证用的 OAuth client secret。
+- `GITHUB_CLIENT_ID` – GitHub 认证用的 OAuth client ID（仅当 `enable_comments` 为 `true` 时需要）。
+- `GITHUB_CLIENT_SECRET` – GitHub 认证用的 OAuth client secret（仅当 `enable_comments` 为 `true` 时需要）。
 - `COOKIE_SECRET` – 用于签名会话 cookie 的密钥。
 
 ## API 端点
@@ -72,5 +72,5 @@ RUST_LOG=error cargo run
 | GET | `/api/categories` | 获取所有分类 |
 | GET | `/api/search` | 搜索文章（需要启用全文搜索） |
 | GET | `/api/search/popular` | 列出热门搜索 |
-| GET | `/api/auth/github/login` | 启动 GitHub OAuth 登录流程 |
-| GET | `/api/auth/github/callback` | GitHub 登录完成后的回调端点 |
+| GET | `/api/auth/github/login` | 启动 GitHub OAuth 登录流程（仅在启用评论功能时可用） |
+| GET | `/api/auth/github/callback` | GitHub 登录完成后的回调端点（仅在启用评论功能时可用） |

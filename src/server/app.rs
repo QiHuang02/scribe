@@ -82,11 +82,12 @@ pub async fn start_server(
         .merge(crate::handlers::tags::create_router())
         .merge(crate::handlers::categories::create_router())
         .merge(crate::handlers::search::create_router())
-        .merge(crate::handlers::auth::create_router())
         .merge(crate::handlers::sitemap::create_router());
 
     if config.enable_comments {
-        app = app.merge(crate::handlers::comments::create_router());
+        app = app
+            .merge(crate::handlers::auth::create_router())
+            .merge(crate::handlers::comments::create_router());
     }
 
     let app = app
