@@ -3,7 +3,8 @@
     <router-link to="/">Articles</router-link> |
     <router-link to="/categories">Categories</router-link> |
     <router-link to="/tags">Tags</router-link> |
-    <router-link to="/about">About</router-link>
+    <router-link to="/about">About</router-link> |
+    <router-link to="/search">Search</router-link>
   </nav>
   <router-view/>
 </template>
