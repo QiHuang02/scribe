@@ -1,6 +1,5 @@
 <template>
   <div class="tags">
-    <h1>Tags</h1>
     <ul v-if="tags.length">
       <li v-for="t in tags" :key="t">
         <router-link :to="{ name: 'home', query: { tag: t } }">{{ t }}</router-link>

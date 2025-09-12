@@ -1,6 +1,5 @@
 <template>
   <div class="home">
-    <h1>Articles</h1>
     <ul v-if="articles.length">
       <li v-for="a in articles" :key="a.slug">
         <router-link :to="`/articles/${a.slug}`">{{ a.metadata.title }}</router-link>
