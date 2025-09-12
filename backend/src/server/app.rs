@@ -177,11 +177,7 @@ async fn watch_articles(state: Arc<AppState>) {
         let mut removed_map = HashMap::new();
         for change in &changes {
             if matches!(change.change_type, FileChange::Removed) {
-                if let Some(article) = store_guard
-                    .query(|a| a.file_path == change.path)
-                    .into_iter()
-                    .next()
-                {
+                if let Some(article) = store_guard.query(|a| a.file_path == change.path).next() {
                     removed_map.insert(change.path.clone(), article.slug.clone());
                 }
             }
@@ -193,10 +189,8 @@ async fn watch_articles(state: Arc<AppState>) {
                     for change in &changes {
                         match change.change_type {
                             FileChange::Added | FileChange::Modified => {
-                                if let Some(article) = store_guard
-                                    .query(|a| a.file_path == change.path)
-                                    .into_iter()
-                                    .next()
+                                if let Some(article) =
+                                    store_guard.query(|a| a.file_path == change.path).next()
                                 {
                                     match store_guard.load_content_for(article) {
                                         Ok(content) => {
@@ -320,11 +314,7 @@ async fn watch_notes(state: Arc<AppState>) {
         let mut removed_map = HashMap::new();
         for change in &changes {
             if matches!(change.change_type, FileChange::Removed) {
-                if let Some(article) = store_guard
-                    .query(|a| a.file_path == change.path)
-                    .into_iter()
-                    .next()
-                {
+                if let Some(article) = store_guard.query(|a| a.file_path == change.path).next() {
                     removed_map.insert(
                         change.path.clone(),
                         format!("notes/{}", article.slug_with_category()),
@@ -339,10 +329,8 @@ async fn watch_notes(state: Arc<AppState>) {
                     for change in &changes {
                         match change.change_type {
                             FileChange::Added | FileChange::Modified => {
-                                if let Some(article) = store_guard
-                                    .query(|a| a.file_path == change.path)
-                                    .into_iter()
-                                    .next()
+                                if let Some(article) =
+                                    store_guard.query(|a| a.file_path == change.path).next()
                                 {
                                     match store_guard.load_content_for(article) {
                                         Ok(content) => {

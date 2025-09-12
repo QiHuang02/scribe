@@ -1,6 +1,6 @@
 use crate::handlers::error::{AppError, ERR_BAD_REQUEST, ERR_NOTE_NOT_FOUND};
 use crate::models::article::{
-    ArticleContent, ArticleRepresentation, ArticleTeaser, PaginatedArticles,
+    Article, ArticleContent, ArticleRepresentation, ArticleTeaser, PaginatedArticles,
 };
 use crate::server::app::AppState;
 use axum::extract::{Path, Query, State};
@@ -43,7 +43,7 @@ async fn get_notes_list(
     let store = state.note_store.read().await;
 
     let all_matching = {
-        let mut notes = store.query(|note| !note.metadata.draft);
+        let mut notes: Vec<&Article> = store.query(|note| !note.metadata.draft).collect();
         if let Some(tag) = &params.tag {
             notes.retain(|a| a.metadata.tags.contains(tag));
         }
@@ -120,7 +120,6 @@ async fn get_note_by_slug(
 
     let note = store
         .query(|n| n.slug == slug && n.metadata.category.as_deref() == category.as_deref())
-        .into_iter()
         .next();
 
     match note {

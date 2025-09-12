@@ -78,28 +78,26 @@ async fn search_articles(
 
             let articles_results: Vec<SearchResult> = {
                 let store = state.store.read().await;
-                let articles = store.query(|article| {
-                    let content = store
-                        .load_content_for(article)
-                        .unwrap_or_else(|_| String::new());
-                    let content_to_search = if content.len() > content_limit {
-                        &content[..content_limit]
-                    } else {
-                        &content
-                    };
+                store
+                    .query(|article| {
+                        let content = store
+                            .load_content_for(article)
+                            .unwrap_or_else(|_| String::new());
+                        let content_to_search = if content.len() > content_limit {
+                            &content[..content_limit]
+                        } else {
+                            &content
+                        };
 
-                    !article.metadata.draft
-                        && (article.metadata.title.to_lowercase().contains(&query_lower)
-                            || article
-                                .metadata
-                                .description
-                                .to_lowercase()
-                                .contains(&query_lower)
-                            || content_to_search.to_lowercase().contains(&query_lower))
-                });
-
-                articles
-                    .into_iter()
+                        !article.metadata.draft
+                            && (article.metadata.title.to_lowercase().contains(&query_lower)
+                                || article
+                                    .metadata
+                                    .description
+                                    .to_lowercase()
+                                    .contains(&query_lower)
+                                || content_to_search.to_lowercase().contains(&query_lower))
+                    })
                     .map(|article| SearchResult {
                         slug: article.slug_with_category(),
                         title: article.metadata.title.clone(),
@@ -112,28 +110,26 @@ async fn search_articles(
 
             let notes_results: Vec<SearchResult> = {
                 let store = state.note_store.read().await;
-                let notes = store.query(|note| {
-                    let content = store
-                        .load_content_for(note)
-                        .unwrap_or_else(|_| String::new());
-                    let content_to_search = if content.len() > content_limit {
-                        &content[..content_limit]
-                    } else {
-                        &content
-                    };
+                store
+                    .query(|note| {
+                        let content = store
+                            .load_content_for(note)
+                            .unwrap_or_else(|_| String::new());
+                        let content_to_search = if content.len() > content_limit {
+                            &content[..content_limit]
+                        } else {
+                            &content
+                        };
 
-                    !note.metadata.draft
-                        && (note.metadata.title.to_lowercase().contains(&query_lower)
-                            || note
-                                .metadata
-                                .description
-                                .to_lowercase()
-                                .contains(&query_lower)
-                            || content_to_search.to_lowercase().contains(&query_lower))
-                });
-
-                notes
-                    .into_iter()
+                        !note.metadata.draft
+                            && (note.metadata.title.to_lowercase().contains(&query_lower)
+                                || note
+                                    .metadata
+                                    .description
+                                    .to_lowercase()
+                                    .contains(&query_lower)
+                                || content_to_search.to_lowercase().contains(&query_lower))
+                    })
                     .map(|note| {
                         let slug = note.slug_with_category();
                         SearchResult {
