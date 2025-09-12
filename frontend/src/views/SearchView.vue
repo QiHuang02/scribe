@@ -1,6 +1,5 @@
 <template>
   <div class="search">
-    <h1>Search</h1>
     <input
       v-model="query"
       @keyup.enter="performSearch"

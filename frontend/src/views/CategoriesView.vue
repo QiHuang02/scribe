@@ -1,6 +1,5 @@
 <template>
   <div class="categories">
-    <h1>Categories</h1>
     <ul v-if="categories.length">
       <li v-for="c in categories" :key="c">
         <router-link :to="{ name: 'home', query: { category: c } }">{{ c }}</router-link>
