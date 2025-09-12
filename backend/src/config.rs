@@ -8,13 +8,14 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+pub const ARTICLE_DIR: &str = "article";
+pub const NOTES_DIR: &str = "notes";
+
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub article_dir: String,
-    #[serde(default = "default_notes_dir")]
-    pub notes_dir: String,
     pub log_level: String,
     pub server_addr: String,
+    #[serde(default = "default_base_url")]
     pub base_url: String,
     pub latest_articles_count: usize,
     #[serde(default)]
@@ -38,17 +39,17 @@ pub struct Config {
 
 impl Config {
     pub fn validate(&self) -> Result<(), String> {
-        if !Path::new(&self.article_dir).exists() {
+        if !Path::new(ARTICLE_DIR).exists() {
             return Err(format!(
                 "Article directory does not exist: {}",
-                self.article_dir
+                ARTICLE_DIR
             ));
         }
 
-        if !Path::new(&self.notes_dir).exists() {
+        if !Path::new(NOTES_DIR).exists() {
             return Err(format!(
                 "Notes directory does not exist: {}",
-                self.notes_dir
+                NOTES_DIR
             ));
         }
 
@@ -85,10 +86,6 @@ impl Config {
             );
         }
 
-        if self.base_url.trim().is_empty() {
-            return Err("Base URL cannot be empty".to_string());
-        }
-
         Ok(())
     }
 }
@@ -113,13 +110,16 @@ fn default_cache_ttl_seconds() -> u64 {
     60
 }
 
-fn default_notes_dir() -> String {
-    "notes".to_string()
+fn default_base_url() -> String {
+    "http://localhost:3000".to_string()
 }
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     let config_content = fs::read_to_string("config.toml")?;
-    let config: Config = toml::from_str(&config_content)?;
+    let mut config: Config = toml::from_str(&config_content)?;
+    if config.base_url.trim().is_empty() {
+        config.base_url = default_base_url();
+    }
     Ok(config)
 }
 
@@ -169,3 +169,4 @@ pub fn initialize_logging(config: &Config) {
         .with(tracing_subscriber::fmt::layer())
         .init();
 }
+

@@ -73,6 +73,24 @@ impl ArticleStore {
         })
     }
 
+    fn strip_h1(content: &str, slug: &str) -> String {
+        let mut warned = false;
+        let mut result = Vec::new();
+        for line in content.lines() {
+            let trimmed = line.trim_start();
+            let lower = trimmed.to_lowercase();
+            if trimmed.starts_with("# ") || lower.starts_with("<h1") {
+                if !warned {
+                    tracing::warn!("H1 tag found in body of '{}'", slug);
+                    warned = true;
+                }
+                continue;
+            }
+            result.push(line);
+        }
+        result.join("\n")
+    }
+
     pub fn detect_file_changes(
         &self,
         content_dir: &str,
@@ -410,6 +428,9 @@ impl ArticleStore {
             .ok_or_else(|| LoadError::MissingFrontMatter(path.to_string_lossy().to_string()))?;
         let mut metadata: Metadata = from_value(data)?;
 
+        // Warn if body contains H1 headings
+        Self::strip_h1(&parsed_content.content, &slug);
+
         if let Some(cat) = category {
             metadata.category = Some(cat.to_string());
         }
@@ -489,7 +510,7 @@ impl ArticleStore {
                     article.file_path, e
                 ))
             })?;
-        let content = parsed_content.content;
+        let content = Self::strip_h1(&parsed_content.content, &article.slug);
         self.content_cache
             .lock()
             .unwrap()

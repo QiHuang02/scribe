@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, ARTICLE_DIR, NOTES_DIR};
 use crate::server::cache::{CachedResponse, ResponseCacheLayer};
 use crate::services::search::SearchService;
 use crate::services::service::ArticleStore;
@@ -29,8 +29,8 @@ pub struct AppState {
 pub async fn create_app_state(
     config: &Arc<Config>,
 ) -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
-    let article_store = ArticleStore::new(&config.article_dir, config.enable_nested_categories)?;
-    let note_store = ArticleStore::new(&config.notes_dir, true)?;
+    let article_store = ArticleStore::new(ARTICLE_DIR, config.enable_nested_categories)?;
+    let note_store = ArticleStore::new(NOTES_DIR, true)?;
     let cache = Cache::builder()
         .max_capacity(config.cache_max_capacity)
         .time_to_live(Duration::from_secs(config.cache_ttl_seconds))
@@ -143,15 +143,15 @@ async fn watch_articles(state: Arc<AppState>) {
             }
         };
 
-    if let Err(e) = watcher.watch(state.config.article_dir.as_ref(), RecursiveMode::Recursive) {
+    if let Err(e) = watcher.watch(std::path::Path::new(ARTICLE_DIR), RecursiveMode::Recursive) {
         error!(
             "Failed to watch directory '{}': {:?}",
-            state.config.article_dir, e
+            ARTICLE_DIR, e
         );
         return;
     }
 
-    info!("Hot reloading enable for '{}'", state.config.article_dir);
+    info!("Hot reloading enable for '{}'", ARTICLE_DIR);
 
     while rx.recv().await.is_some() {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -160,7 +160,7 @@ async fn watch_articles(state: Arc<AppState>) {
         let mut store_guard = state.store.write().await;
 
         match store_guard.incremental_update(
-            &state.config.article_dir,
+            ARTICLE_DIR,
             state.config.enable_nested_categories,
         ) {
             Ok(true) => {
@@ -175,7 +175,7 @@ async fn watch_articles(state: Arc<AppState>) {
                 tracing::error!("Error during incremental update: {:?}", e);
                 info!("Falling back to full reload...");
                 match ArticleStore::new(
-                    &state.config.article_dir,
+                    ARTICLE_DIR,
                     state.config.enable_nested_categories,
                 ) {
                     Ok(new_store) => {
@@ -216,15 +216,15 @@ async fn watch_notes(state: Arc<AppState>) {
             }
         };
 
-    if let Err(e) = watcher.watch(state.config.notes_dir.as_ref(), RecursiveMode::Recursive) {
+    if let Err(e) = watcher.watch(std::path::Path::new(NOTES_DIR), RecursiveMode::Recursive) {
         error!(
             "Failed to watch directory '{}': {:?}",
-            state.config.notes_dir, e
+            NOTES_DIR, e
         );
         return;
     }
 
-    info!("Hot reloading enable for '{}'", state.config.notes_dir);
+    info!("Hot reloading enable for '{}'", NOTES_DIR);
 
     while rx.recv().await.is_some() {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -232,7 +232,7 @@ async fn watch_notes(state: Arc<AppState>) {
         info!("File change detected, performing incremental update...");
         let mut store_guard = state.note_store.write().await;
 
-        match store_guard.incremental_update(&state.config.notes_dir, true) {
+        match store_guard.incremental_update(NOTES_DIR, true) {
             Ok(true) => {
                 reindex_all_content(&state).await;
                 state.cache.invalidate_all();
@@ -244,7 +244,7 @@ async fn watch_notes(state: Arc<AppState>) {
             Err(e) => {
                 tracing::error!("Error during incremental update: {:?}", e);
                 info!("Falling back to full reload...");
-                match ArticleStore::new(&state.config.notes_dir, true) {
+                match ArticleStore::new(NOTES_DIR, true) {
                     Ok(new_store) => {
                         *store_guard = new_store;
 
