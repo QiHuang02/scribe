@@ -1,6 +1,6 @@
 use crate::config::{
-    Config, ARTICLE_DIR, NOTES_DIR, CACHE_MAX_CAPACITY, CACHE_TTL_SECONDS, ENABLE_NESTED_CATEGORIES,
-    SERVER_ADDR,
+    ARTICLE_DIR, CACHE_MAX_CAPACITY, CACHE_TTL_SECONDS, Config, ENABLE_NESTED_CATEGORIES,
+    NOTES_DIR, SERVER_ADDR,
 };
 use crate::server::cache::{CachedResponse, ResponseCacheLayer};
 use crate::services::search::SearchService;
@@ -147,10 +147,7 @@ async fn watch_articles(state: Arc<AppState>) {
         };
 
     if let Err(e) = watcher.watch(std::path::Path::new(ARTICLE_DIR), RecursiveMode::Recursive) {
-        error!(
-            "Failed to watch directory '{}': {:?}",
-            ARTICLE_DIR, e
-        );
+        error!("Failed to watch directory '{}': {:?}", ARTICLE_DIR, e);
         return;
     }
 
@@ -162,10 +159,7 @@ async fn watch_articles(state: Arc<AppState>) {
         info!("File change detected, performing incremental update...");
         let mut store_guard = state.store.write().await;
 
-        match store_guard.incremental_update(
-            ARTICLE_DIR,
-            ENABLE_NESTED_CATEGORIES,
-        ) {
+        match store_guard.incremental_update(ARTICLE_DIR, ENABLE_NESTED_CATEGORIES) {
             Ok(true) => {
                 reindex_all_content(&state).await;
                 state.cache.invalidate_all();
@@ -217,10 +211,7 @@ async fn watch_notes(state: Arc<AppState>) {
         };
 
     if let Err(e) = watcher.watch(std::path::Path::new(NOTES_DIR), RecursiveMode::Recursive) {
-        error!(
-            "Failed to watch directory '{}': {:?}",
-            NOTES_DIR, e
-        );
+        error!("Failed to watch directory '{}': {:?}", NOTES_DIR, e);
         return;
     }
 
@@ -262,7 +253,7 @@ async fn watch_notes(state: Arc<AppState>) {
     }
 }
 
-async fn reindex_all_content(state: &Arc<AppState>) {
+pub async fn reindex_all_content(state: &Arc<AppState>) {
     if let Some(ref search_service) = state.search_service {
         let store = state.store.read().await;
         let mut all = store.load_full_articles();

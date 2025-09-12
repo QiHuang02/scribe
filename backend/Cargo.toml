@@ -52,3 +52,4 @@ oauth2 = { version = "4", default-features = false, features = ["reqwest", "rust
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 axum-extra = { version = "0.10", features = ["cookie", "cookie-signed"] }
 cookie = { version = "0.18", features = ["key-expansion"] }
+slug = "0.1"
