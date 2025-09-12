@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import ArticleView from '../views/ArticleView.vue'
 import CategoriesView from '../views/CategoriesView.vue'
 import TagsView from '../views/TagsView.vue'
+import SearchView from '../views/SearchView.vue'
 
 const routes = [
   {
@@ -32,6 +33,11 @@ const routes = [
     path: '/articles/:slug',
     name: 'article',
     component: ArticleView
+  },
+  {
+    path: '/search',
+    name: 'search',
+    component: SearchView
   }
 ]
 
