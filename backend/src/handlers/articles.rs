@@ -230,6 +230,12 @@ async fn create_article(
         .get_by_slug(&slug_candidate)
         .is_some()
     {
+        if counter > 100 {
+            return Err(AppError::BadRequest {
+                code: ERR_BAD_REQUEST,
+                message: "Exceeded maximum slug generation attempts".to_string(),
+            });
+        }
         slug_candidate = format!("{}-{}", base_slug, counter);
         counter += 1;
     }
