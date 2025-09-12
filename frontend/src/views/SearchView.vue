@@ -31,7 +31,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 
 // simple debounce helper
 function debounce(fn, wait = 300) {
@@ -88,6 +88,7 @@ async function doSearch() {
     const data = await res.json()
     results.value = data.results || []
     error.value = ''
+    loadPopular()
   } catch (e) {
     if (e.name === 'AbortError') return
     error.value = `Failed to load: ${e.message}`
@@ -106,15 +107,22 @@ function setQuery(q) {
   performSearch()
 }
 
-onMounted(async () => {
+async function loadPopular() {
+  if (window.__popularLoaded) {
+    popular.value = window.__popularCache || []
+    return
+  }
   try {
     const res = await fetch('/api/search/popular')
     if (res.ok) {
       const data = await res.json()
       popular.value = data.searches || []
+      window.__popularCache = popular.value
     }
   } catch (e) {
     // ignore errors for optional popular searches
+  } finally {
+    window.__popularLoaded = true
   }
-})
+}
 </script>
