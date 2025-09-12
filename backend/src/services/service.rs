@@ -7,6 +7,7 @@ use serde_yaml::from_value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
+use std::sync::Mutex;
 use std::time::SystemTime;
 use walkdir::WalkDir;
 
@@ -16,6 +17,7 @@ pub struct ArticleStore {
     pub tags: HashSet<String>,
     pub categories: HashSet<String>,
     file_cache: HashMap<String, SystemTime>,
+    content_cache: Mutex<HashMap<String, String>>,
 }
 
 #[derive(Debug)]
@@ -67,6 +69,7 @@ impl ArticleStore {
             tags: all_tags,
             categories: all_categories,
             file_cache,
+            content_cache: Mutex::new(HashMap::new()),
         })
     }
 
@@ -210,6 +213,7 @@ impl ArticleStore {
         file_path: &str,
         enable_nested_categories: bool,
     ) -> Result<(), LoadError> {
+        self.content_cache.lock().unwrap().remove(file_path);
         let path = Path::new(file_path);
 
         let category = if enable_nested_categories {
@@ -257,6 +261,7 @@ impl ArticleStore {
     }
 
     fn remove_article_by_path(&mut self, file_path: &str) -> bool {
+        self.content_cache.lock().unwrap().remove(file_path);
         if let Some(article) = self.articles.iter_mut().find(|a| a.file_path == file_path) {
             article.deleted = true;
             self.slug_map.remove(&article.slug);
@@ -295,6 +300,11 @@ impl ArticleStore {
                 self.file_cache.insert(file_path, modified_time);
             }
         }
+
+        self.content_cache
+            .lock()
+            .unwrap()
+            .retain(|path, _| self.file_cache.contains_key(path));
 
         Ok(())
     }
@@ -458,6 +468,13 @@ impl ArticleStore {
     }
 
     pub fn load_content_for(&self, article: &Article) -> Result<String, LoadError> {
+        {
+            let cache = self.content_cache.lock().unwrap();
+            if let Some(content) = cache.get(&article.file_path) {
+                return Ok(content.clone());
+            }
+        }
+
         let file_content = fs::read_to_string(&article.file_path)?;
         let matter = Matter::<YAML>::new();
         let parsed_content = matter
@@ -468,7 +485,12 @@ impl ArticleStore {
                     article.file_path, e
                 ))
             })?;
-        Ok(parsed_content.content)
+        let content = parsed_content.content;
+        self.content_cache
+            .lock()
+            .unwrap()
+            .insert(article.file_path.clone(), content.clone());
+        Ok(content)
     }
 
     pub fn load_full_articles(&self) -> Vec<ArticleContent> {
