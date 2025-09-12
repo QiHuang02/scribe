@@ -22,6 +22,7 @@ github_redirect_url = "http://localhost:3000/api/auth/github/callback"
 
 如果 `hostname` 缺失或为空字符串，将默认使用 `http://localhost:3000`。
 
+
 ### 错误码
 
 | 代码 | 描述 |

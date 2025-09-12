@@ -18,9 +18,11 @@ comments = false
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"
 ```
 
+
 Content is loaded from the fixed `article` and `notes` directories located at the backend root, and the server watches the `article` directory for changes, automatically reloading modified files. Optional full‑text search can be enabled with `enable_full_text_search`. Comment endpoints and widgets remain disabled unless `comments` is set to `true`. The `github_redirect_url` and GitHub OAuth environment variables are only required when comments are enabled. The server listens on `127.0.0.1:3000` with nested categories enabled and a cache capacity of 1000 items (60‑second TTL).
 
 If `hostname` is missing or empty, it defaults to `http://localhost:3000`.
+
 
 ### Error Codes
 
