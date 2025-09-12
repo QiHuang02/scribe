@@ -44,7 +44,6 @@ const routes = [
   },
   {
     path: '/articles/new',
-    name: 'article-new',
     component: () => import('../views/ArticleNewView.vue')
   },
   {

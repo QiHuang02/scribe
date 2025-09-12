@@ -5,6 +5,10 @@
         <el-input v-model="form.title" placeholder="请输入标题" />
       </el-form-item>
 
+      <el-form-item label="描述">
+        <el-input type="textarea" v-model="form.description" />
+      </el-form-item>
+
       <el-form-item label="标签">
         <el-select
           v-model="form.tags"
@@ -40,81 +44,26 @@
         </el-select>
       </el-form-item>
 
-      <el-form-item label="描述">
-        <el-input type="textarea" v-model="form.description" />
-      </el-form-item>
-
       <el-form-item>
-        <el-checkbox v-model="form.draft">草稿</el-checkbox>
-      </el-form-item>
-
-      <el-form-item label="内容" required>
-        <div class="editor">
-          <el-button @click="isPreview = !isPreview" class="toggle-btn">
-            {{ isPreview ? '编辑' : '预览' }}
-          </el-button>
-          <div v-if="!isPreview" class="edit-area">
-            <textarea v-model="form.content"></textarea>
-          </div>
-          <div v-else class="preview-area" v-html="renderedMarkdown"></div>
-        </div>
-      </el-form-item>
-
-      <el-form-item>
-        <el-button type="primary" @click="submit">发布</el-button>
+        <el-button type="primary" @click="submit">提交</el-button>
       </el-form-item>
     </el-form>
   </el-card>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import MarkdownIt from 'markdown-it'
-import DOMPurify from 'dompurify'
 
 const form = ref({
   title: '',
-  tags: [],
-  category: '',
   description: '',
-  draft: false,
-  content: ''
+  tags: [],
+  category: ''
 })
 
 const tagOptions = ref([])
 const categoryOptions = ref([])
-const isPreview = ref(false)
-
-const md = new MarkdownIt()
-const renderedMarkdown = computed(() =>
-  DOMPurify.sanitize(md.render(form.value.content || ''))
-)
-
-const token = localStorage.getItem('token') || ''
-
-async function submit() {
-  if (!form.value.title || !form.value.content) {
-    ElMessage.error('标题和内容为必填项')
-    return
-  }
-  try {
-    const res = await fetch('/api/articles', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token
-      },
-      body: JSON.stringify(form.value)
-    })
-    if (!res.ok) {
-      throw new Error(await res.text())
-    }
-    ElMessage.success('创建成功')
-  } catch (e) {
-    ElMessage.error(e.message || '创建失败')
-  }
-}
 
 onMounted(async () => {
   try {
@@ -132,19 +81,30 @@ onMounted(async () => {
     // ignore loading errors
   }
 })
+
+async function submit() {
+  try {
+    const res = await fetch('/api/articles', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(form.value)
+    })
+    if (!res.ok) {
+      throw new Error(await res.text())
+    }
+    ElMessage.success('提交成功')
+  } catch (e) {
+    ElMessage.error(e.message || '提交失败')
+  }
+}
 </script>
 
 <style scoped>
-.editor .edit-area textarea {
-  width: 100%;
-  min-height: 300px;
-}
-.preview-area {
-  border: 1px solid #dcdfe6;
-  padding: 10px;
-  min-height: 300px;
-}
-.toggle-btn {
-  margin-bottom: 10px;
+.article-new {
+  max-width: 600px;
+  margin: 0 auto;
 }
 </style>
+
