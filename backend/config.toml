@@ -1,11 +1,5 @@
-article_dir = "article"
-notes_dir = "notes"
 log_level = "scribe=debug,tower_http=debug"
-server_addr = "127.0.0.1:3000"
-base_url = "http://localhost:3000"
+hostname = "http://localhost:3000"
 latest_articles_count = 10
-enable_nested_categories = true
-enable_comments = false
-cache_max_capacity = 1000
-cache_ttl_seconds = 60
+comments = false
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"

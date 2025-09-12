@@ -11,18 +11,16 @@ This project exposes a REST API for managing articles. Errors are returned in a 
 Runtime configuration is read from `config.toml`. Important options include:
 
 ```toml
-article_dir = "article"
 log_level = "scribe=debug,tower_http=debug"
-server_addr = "127.0.0.1:3000"
+hostname = "http://localhost:3000"
 latest_articles_count = 10
-enable_nested_categories = true
-enable_comments = false
-cache_max_capacity = 1000
-cache_ttl_seconds = 60
+comments = false
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"
 ```
 
-The server watches `article_dir` for changes and automatically reloads modified files. Optional full‑text search can be enabled with `enable_full_text_search`. Comment endpoints and widgets remain disabled unless `enable_comments` is set to `true`. The `github_redirect_url` and GitHub OAuth environment variables are only required when comments are enabled.
+Content is loaded from the fixed `article` and `notes` directories located at the backend root, and the server watches the `article` directory for changes, automatically reloading modified files. Optional full‑text search can be enabled with `enable_full_text_search`. Comment endpoints and widgets remain disabled unless `comments` is set to `true`. The `github_redirect_url` and GitHub OAuth environment variables are only required when comments are enabled. The server listens on `127.0.0.1:3000` with nested categories enabled and a cache capacity of 1000 items (60‑second TTL).
+
+If `hostname` is missing or empty, it defaults to `http://localhost:3000`.
 
 ### Error Codes
 
@@ -57,8 +55,8 @@ Error logs can then be viewed in the console or collected by your preferred log 
 The application reads the following values from the environment (or a `.env` file):
 
 - `ADMIN_TOKEN_HASH` – SHA-256 hash of the admin token used for admin‑only routes.
-- `GITHUB_CLIENT_ID` – OAuth client identifier for GitHub authentication (required when `enable_comments` is true).
-- `GITHUB_CLIENT_SECRET` – OAuth client secret for GitHub authentication (required when `enable_comments` is true).
+- `GITHUB_CLIENT_ID` – OAuth client identifier for GitHub authentication (required when `comments` is true).
+- `GITHUB_CLIENT_SECRET` – OAuth client secret for GitHub authentication (required when `comments` is true).
 - `COOKIE_SECRET` – secret key used to sign session cookies.
 
 ### API Endpoints

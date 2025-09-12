@@ -1,26 +1,27 @@
 use serde::Deserialize;
 use std::env;
 use std::fs;
-use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+pub const ARTICLE_DIR: &str = "article";
+pub const NOTES_DIR: &str = "notes";
+pub const SERVER_ADDR: &str = "127.0.0.1:3000";
+pub const ENABLE_NESTED_CATEGORIES: bool = true;
+pub const CACHE_MAX_CAPACITY: u64 = 1_000;
+pub const CACHE_TTL_SECONDS: u64 = 60;
+
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub article_dir: String,
-    #[serde(default = "default_notes_dir")]
-    pub notes_dir: String,
     pub log_level: String,
-    pub server_addr: String,
-    pub base_url: String,
+    #[serde(default = "default_hostname")]
+    pub hostname: String,
     pub latest_articles_count: usize,
     #[serde(default)]
-    pub enable_nested_categories: bool,
-    #[serde(default)]
-    pub enable_comments: bool,
+    pub comments: bool,
     pub github_redirect_url: String,
     #[serde(default = "default_search_index_dir")]
     pub search_index_dir: String,
@@ -30,30 +31,22 @@ pub struct Config {
     pub search_index_heap_size: usize,
     #[serde(default = "default_content_search_limit")]
     pub content_search_limit: usize,
-    #[serde(default = "default_cache_max_capacity")]
-    pub cache_max_capacity: u64,
-    #[serde(default = "default_cache_ttl_seconds")]
-    pub cache_ttl_seconds: u64,
 }
 
 impl Config {
     pub fn validate(&self) -> Result<(), String> {
-        if !Path::new(&self.article_dir).exists() {
+        if !Path::new(ARTICLE_DIR).exists() {
             return Err(format!(
                 "Article directory does not exist: {}",
-                self.article_dir
+                ARTICLE_DIR
             ));
         }
 
-        if !Path::new(&self.notes_dir).exists() {
+        if !Path::new(NOTES_DIR).exists() {
             return Err(format!(
                 "Notes directory does not exist: {}",
-                self.notes_dir
+                NOTES_DIR
             ));
-        }
-
-        if self.server_addr.parse::<SocketAddr>().is_err() {
-            return Err(format!("Invalid server address: {}", self.server_addr));
         }
 
         if EnvFilter::try_new(&self.log_level).is_err() {
@@ -71,22 +64,10 @@ impl Config {
             ));
         }
 
-        if self.cache_max_capacity == 0 {
-            return Err("Cache capacity must be greater than 0".to_string());
-        }
-
-        if self.cache_ttl_seconds == 0 {
-            return Err("Cache TTL must be greater than 0".to_string());
-        }
-
-        if self.enable_comments && self.github_redirect_url.trim().is_empty() {
+        if self.comments && self.github_redirect_url.trim().is_empty() {
             return Err(
                 "GitHub redirect URL cannot be empty when comments are enabled".to_string(),
             );
-        }
-
-        if self.base_url.trim().is_empty() {
-            return Err("Base URL cannot be empty".to_string());
         }
 
         Ok(())
@@ -105,21 +86,16 @@ fn default_content_search_limit() -> usize {
     10_000
 }
 
-fn default_cache_max_capacity() -> u64 {
-    1_000
-}
-
-fn default_cache_ttl_seconds() -> u64 {
-    60
-}
-
-fn default_notes_dir() -> String {
-    "notes".to_string()
+fn default_hostname() -> String {
+    "http://localhost:3000".to_string()
 }
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     let config_content = fs::read_to_string("config.toml")?;
-    let config: Config = toml::from_str(&config_content)?;
+    let mut config: Config = toml::from_str(&config_content)?;
+    if config.hostname.trim().is_empty() {
+        config.hostname = default_hostname();
+    }
     Ok(config)
 }
 
@@ -131,7 +107,7 @@ pub fn initialize_config() -> Result<Arc<Config>, Box<dyn std::error::Error>> {
         .map_err(|e| format!("Configuration validation failed: {}", e))?;
     // Validate required environment variables using their respective helpers
     get_admin_token_hash()?;
-    if config.enable_comments {
+    if config.comments {
         get_github_client_id()?;
         get_github_client_secret()?;
     }
@@ -169,3 +145,4 @@ pub fn initialize_logging(config: &Config) {
         .with(tracing_subscriber::fmt::layer())
         .init();
 }
+

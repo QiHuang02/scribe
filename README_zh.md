@@ -11,18 +11,16 @@
 运行时配置从 `config.toml` 读取。重要选项包括：
 
 ```toml
-article_dir = "article"
 log_level = "scribe=debug,tower_http=debug"
-server_addr = "127.0.0.1:3000"
+hostname = "http://localhost:3000"
 latest_articles_count = 10
-enable_nested_categories = true
-enable_comments = false
-cache_max_capacity = 1000
-cache_ttl_seconds = 60
+comments = false
 github_redirect_url = "http://localhost:3000/api/auth/github/callback"
 ```
 
-服务器会监视 `article_dir` 的变化并自动重新加载被修改的文件。可选的全文搜索可以通过 `enable_full_text_search` 启用。评论端点和小部件默认关闭，除非将 `enable_comments` 设置为 `true`。只有在启用评论功能时才需要 `github_redirect_url` 和相关的 GitHub OAuth 环境变量。
+内容固定存放在后端根路径下的 `article` 与 `notes` 目录中，服务器会监视 `article` 目录的变化并自动重新加载被修改的文件。可选的全文搜索可以通过 `enable_full_text_search` 启用。评论端点和小部件默认关闭，除非将 `comments` 设置为 `true`。只有在启用评论功能时才需要 `github_redirect_url` 和相关的 GitHub OAuth 环境变量。服务器固定监听 `127.0.0.1:3000`，启用了嵌套分类并使用容量为 1000、TTL 为 60 秒的缓存。
+
+如果 `hostname` 缺失或为空字符串，将默认使用 `http://localhost:3000`。
 
 ### 错误码
 
@@ -57,8 +55,8 @@ RUST_LOG=error cargo run
 应用从环境（或 `.env` 文件）读取以下值：
 
 - `ADMIN_TOKEN_HASH` – 管理员路由所用 token 的 SHA-256 哈希。
-- `GITHUB_CLIENT_ID` – GitHub 认证用的 OAuth client ID（仅当 `enable_comments` 为 `true` 时需要）。
-- `GITHUB_CLIENT_SECRET` – GitHub 认证用的 OAuth client secret（仅当 `enable_comments` 为 `true` 时需要）。
+- `GITHUB_CLIENT_ID` – GitHub 认证用的 OAuth client ID（仅当 `comments` 为 `true` 时需要）。
+- `GITHUB_CLIENT_SECRET` – GitHub 认证用的 OAuth client secret（仅当 `comments` 为 `true` 时需要）。
 - `COOKIE_SECRET` – 用于签名会话 cookie 的密钥。
 
 ### API 端点
