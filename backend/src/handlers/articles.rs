@@ -8,6 +8,7 @@ use crate::models::article::{
 use crate::server::app::{AppState, reindex_all_content};
 use crate::server::auth::require_admin;
 use crate::services::article_service::save_version;
+use crate::services::service::ArticleStore;
 use axum::extract::{Path, Query, State};
 use axum::middleware;
 use axum::response::IntoResponse;
@@ -101,61 +102,65 @@ pub fn create_router() -> Router<Arc<AppState>> {
         )
 }
 
+async fn filter_articles<'a>(
+    store: &'a ArticleStore,
+    params: &ArticleParams,
+    state: &AppState,
+) -> Vec<&'a Article> {
+    let mut articles = store.query(|article| !article.metadata.draft);
+    if let Some(tag) = &params.tag {
+        articles.retain(|a| a.metadata.tags.contains(tag));
+    }
+    if let Some(category) = &params.category {
+        articles.retain(|a| a.metadata.category.as_ref() == Some(category));
+    }
+    if let Some(query) = &params.q {
+        if let Some(ref search_service) = state.search_service {
+            match search_service.search(query, 1000, false).await {
+                Ok(search_results) => {
+                    let search_slugs: std::collections::HashSet<String> =
+                        search_results.into_iter().map(|r| r.slug).collect();
+                    articles.retain(|a| search_slugs.contains(&a.slug));
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Full-text search failed, falling back to simple search: {:?}",
+                        e
+                    );
+                    let query_lower = query.to_lowercase();
+                    articles.retain(|a| {
+                        let content = store.load_content_for(a).unwrap_or_else(|_| String::new());
+                        a.metadata.title.to_lowercase().contains(&query_lower)
+                            || a.metadata.description.to_lowercase().contains(&query_lower)
+                            || content.to_lowercase().contains(&query_lower)
+                    });
+                }
+            }
+        } else {
+            let query_lower = query.to_lowercase();
+            articles.retain(|a| {
+                let content = store.load_content_for(a).unwrap_or_else(|_| String::new());
+                let content_to_search = if content.len() > state.config.content_search_limit {
+                    &content[..state.config.content_search_limit]
+                } else {
+                    &content
+                };
+
+                a.metadata.title.to_lowercase().contains(&query_lower)
+                    || a.metadata.description.to_lowercase().contains(&query_lower)
+                    || content_to_search.to_lowercase().contains(&query_lower)
+            });
+        }
+    }
+    articles
+}
+
 async fn get_articles_list(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ArticleParams>,
 ) -> Result<impl IntoResponse, AppError> {
     let store = state.store.read().await;
-
-    let all_matching_articles = {
-        let mut articles = store.query(|article| !article.metadata.draft);
-        if let Some(tag) = &params.tag {
-            articles.retain(|a| a.metadata.tags.contains(tag));
-        }
-        if let Some(category) = &params.category {
-            articles.retain(|a| a.metadata.category.as_ref() == Some(category));
-        }
-        if let Some(query) = &params.q {
-            if let Some(ref search_service) = state.search_service {
-                match search_service.search(query, 1000, false).await {
-                    Ok(search_results) => {
-                        let search_slugs: std::collections::HashSet<String> =
-                            search_results.into_iter().map(|r| r.slug).collect();
-                        articles.retain(|a| search_slugs.contains(&a.slug));
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Full-text search failed, falling back to simple search: {:?}",
-                            e
-                        );
-                        let query_lower = query.to_lowercase();
-                        articles.retain(|a| {
-                            let content =
-                                store.load_content_for(a).unwrap_or_else(|_| String::new());
-                            a.metadata.title.to_lowercase().contains(&query_lower)
-                                || a.metadata.description.to_lowercase().contains(&query_lower)
-                                || content.to_lowercase().contains(&query_lower)
-                        });
-                    }
-                }
-            } else {
-                let query_lower = query.to_lowercase();
-                articles.retain(|a| {
-                    let content = store.load_content_for(a).unwrap_or_else(|_| String::new());
-                    let content_to_search = if content.len() > state.config.content_search_limit {
-                        &content[..state.config.content_search_limit]
-                    } else {
-                        &content
-                    };
-
-                    a.metadata.title.to_lowercase().contains(&query_lower)
-                        || a.metadata.description.to_lowercase().contains(&query_lower)
-                        || content_to_search.to_lowercase().contains(&query_lower)
-                });
-            }
-        }
-        articles
-    };
+    let all_matching_articles = filter_articles(&store, &params, &state).await;
 
     let total_articles = all_matching_articles.len();
     let limit = if params.limit > 0 { params.limit } else { 10 };
