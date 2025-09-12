@@ -101,7 +101,7 @@ async fn search_articles(
                 articles
                     .into_iter()
                     .map(|article| SearchResult {
-                        slug: article.slug.clone(),
+                        slug: article.slug_with_category(),
                         title: article.metadata.title.clone(),
                         description: article.metadata.description.clone(),
                         score: 1.0,
