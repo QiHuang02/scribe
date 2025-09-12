@@ -5,6 +5,8 @@ import ArticleVersionView from '../views/ArticleVersionView.vue'
 import CategoriesView from '../views/CategoriesView.vue'
 import TagsView from '../views/TagsView.vue'
 import SearchView from '../views/SearchView.vue'
+import NotesView from '../views/NotesView.vue'
+import NoteView from '../views/NoteView.vue'
 
 const routes = [
   {
@@ -21,6 +23,16 @@ const routes = [
     path: '/tags',
     name: 'tags',
     component: TagsView
+  },
+  {
+    path: '/notes',
+    name: 'notes',
+    component: NotesView
+  },
+  {
+    path: '/notes/:slug(.*)',
+    name: 'note',
+    component: NoteView
   },
   {
     path: '/about',
