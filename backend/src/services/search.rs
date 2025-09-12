@@ -137,7 +137,7 @@ impl SearchService {
         Ok(())
     }
 
-    pub fn search(
+    pub async fn search(
         &self,
         query_text: &str,
         limit: usize,
@@ -145,7 +145,7 @@ impl SearchService {
     ) -> Result<Vec<SearchResult>, SearchError> {
         let searcher = self.reader.searcher();
 
-        self.record_search(query_text);
+        self.record_search(query_text).await;
 
         let query = self.query_parser.parse_query(query_text)?;
         let top_docs = searcher.search(&query, &TopDocs::with_limit(limit))?;
@@ -213,36 +213,31 @@ impl SearchService {
         highlights
     }
 
-    fn record_search(&self, query: &str) {
-        if let Ok(mut stats) = self.search_stats.try_write() {
-            *stats.entry(query.to_string()).or_insert(0) += 1;
-        }
+    async fn record_search(&self, query: &str) {
+        let mut stats = self.search_stats.write().await;
+        *stats.entry(query.to_string()).or_insert(0) += 1;
 
-        if let Ok(mut recent) = self.recent_searches.try_write() {
-            let search_stat = SearchStats {
-                query: query.to_string(),
-                count: 1,
-                timestamp: chrono::Utc::now(),
-            };
-            recent.push(search_stat);
+        let mut recent = self.recent_searches.write().await;
+        let search_stat = SearchStats {
+            query: query.to_string(),
+            count: 1,
+            timestamp: chrono::Utc::now(),
+        };
+        recent.push(search_stat);
 
-            if recent.len() > 1000 {
-                let len = recent.len();
-                recent.drain(0..len - 1000);
-            }
+        if recent.len() > 1000 {
+            let len = recent.len();
+            recent.drain(0..len - 1000);
         }
     }
 
-    pub fn get_popular_searches(&self, limit: usize) -> Vec<(String, usize)> {
-        if let Ok(stats) = self.search_stats.try_read() {
-            let mut popular: Vec<(String, usize)> =
-                stats.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    pub async fn get_popular_searches(&self, limit: usize) -> Vec<(String, usize)> {
+        let stats = self.search_stats.read().await;
+        let mut popular: Vec<(String, usize)> =
+            stats.iter().map(|(k, v)| (k.clone(), *v)).collect();
 
-            popular.sort_by(|a, b| b.1.cmp(&a.1));
-            popular.into_iter().take(limit).collect()
-        } else {
-            Vec::new()
-        }
+        popular.sort_by(|a, b| b.1.cmp(&a.1));
+        popular.into_iter().take(limit).collect()
     }
 }
 
