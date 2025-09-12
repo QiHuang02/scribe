@@ -2095,6 +2095,7 @@ dependencies = [
  "slug",
  "subtle",
  "tantivy",
+ "tempfile",
  "thiserror 2.0.16",
  "tokio",
  "toml",

@@ -16,12 +16,13 @@ use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::Utc;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 use slug::slugify;
 use std::fs;
-use std::path::Path as StdPath;
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
+use tokio::sync::RwLock;
 
 #[derive(Deserialize, Debug)]
 pub struct ArticleParams {
@@ -243,10 +244,10 @@ async fn get_articles_list(
     Ok(result)
 }
 
-async fn create_article(
-    State(state): State<Arc<AppState>>,
-    Json(payload): Json<CreateArticleRequest>,
-) -> Result<impl IntoResponse, AppError> {
+async fn prepare_metadata(
+    store: Arc<RwLock<ArticleStore>>,
+    payload: &CreateArticleRequest,
+) -> Result<(String, Metadata, PathBuf), AppError> {
     if payload.title.trim().is_empty() || payload.content.trim().is_empty() {
         return Err(AppError::BadRequest {
             code: ERR_BAD_REQUEST,
@@ -264,13 +265,7 @@ async fn create_article(
 
     let mut slug_candidate = base_slug.clone();
     let mut counter = 1;
-    while state
-        .store
-        .read()
-        .await
-        .get_by_slug(&slug_candidate)
-        .is_some()
-    {
+    while store.read().await.get_by_slug(&slug_candidate).is_some() {
         if counter > 100 {
             return Err(AppError::BadRequest {
                 code: ERR_BAD_REQUEST,
@@ -286,12 +281,13 @@ async fn create_article(
         title: payload.title.clone(),
         author: "system".to_string(),
         date: Utc::now(),
-        tags: payload.tags.unwrap_or_default(),
-        description: payload.description.unwrap_or_default(),
+        tags: payload.tags.clone().unwrap_or_default(),
+        description: payload.description.clone().unwrap_or_default(),
         draft: payload.draft.unwrap_or(false),
         last_updated: None,
         category: payload.category.clone(),
     };
+
     let file_path = if let Some(ref cat) = payload.category {
         StdPath::new(ARTICLE_DIR)
             .join(cat)
@@ -300,13 +296,24 @@ async fn create_article(
         StdPath::new(ARTICLE_DIR).join(format!("{}.md", slug))
     };
 
-    write_article_to_file(&metadata, &payload.content, &file_path)?;
+    Ok((slug, metadata, file_path))
+}
 
-    let last_modified = fs::metadata(&file_path)
+async fn persist_article(
+    store: Arc<RwLock<ArticleStore>>,
+    slug: &str,
+    metadata: &Metadata,
+    content: &str,
+    file_path: &StdPath,
+) -> Result<Article, AppError> {
+    write_article_to_file(metadata, content, file_path)?;
+
+    let last_modified = fs::metadata(file_path)
         .and_then(|m| m.modified())
         .unwrap_or(SystemTime::now());
+
     let article = Article {
-        slug: slug.clone(),
+        slug: slug.to_string(),
         metadata: metadata.clone(),
         version: Utc::now().timestamp_millis() as u64,
         updated_at: Utc::now(),
@@ -320,7 +327,7 @@ async fn create_article(
     })?;
 
     {
-        let mut store = state.store.write().await;
+        let mut store = store.write().await;
         if let Err(e) = store.incremental_update(ARTICLE_DIR, ENABLE_NESTED_CATEGORIES) {
             return Err(AppError::InternalServerError {
                 code: ERR_INTERNAL_SERVER,
@@ -329,10 +336,29 @@ async fn create_article(
         }
     }
 
+    Ok(article)
+}
+
+fn build_response(slug: &str) -> Json<Value> {
+    Json(json!({ "slug": slug, "message": "Article created" }))
+}
+
+async fn create_article(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateArticleRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let (slug, metadata, file_path) = prepare_metadata(Arc::clone(&state.store), &payload).await?;
+    persist_article(
+        Arc::clone(&state.store),
+        &slug,
+        &metadata,
+        &payload.content,
+        &file_path,
+    )
+    .await?;
     reindex_all_content(&state).await;
     state.cache.invalidate_all();
-
-    Ok(Json(json!({ "slug": slug, "message": "Article created" })))
+    Ok(build_response(&slug))
 }
 
 async fn update_article(
@@ -450,5 +476,82 @@ async fn get_article_by_slug(
             code: ERR_ARTICLE_NOT_FOUND,
             message: format!("Article with slug {} not found", slug),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ENABLE_NESTED_CATEGORIES;
+    use tempfile::tempdir;
+
+    async fn setup_store() -> (
+        tempfile::TempDir,
+        Arc<RwLock<ArticleStore>>,
+        std::path::PathBuf,
+    ) {
+        let dir = tempdir().unwrap();
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        std::fs::create_dir("article").unwrap();
+        let store = Arc::new(RwLock::new(
+            ArticleStore::new("article", ENABLE_NESTED_CATEGORIES).unwrap(),
+        ));
+        (dir, store, original)
+    }
+
+    #[tokio::test]
+    async fn test_prepare_metadata() {
+        let (_dir, store, original) = setup_store().await;
+        let payload = CreateArticleRequest {
+            title: "Test Title".to_string(),
+            content: "Content".to_string(),
+            tags: None,
+            category: None,
+            description: None,
+            draft: Some(false),
+        };
+        let (slug, metadata, path) = prepare_metadata(store, &payload).await.unwrap();
+        assert_eq!(slug, "test-title");
+        assert!(path.ends_with("article/test-title.md"));
+        assert_eq!(metadata.title, "Test Title");
+        std::env::set_current_dir(original).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_persist_article() {
+        let (_dir, store, original) = setup_store().await;
+        let payload = CreateArticleRequest {
+            title: "Persist".to_string(),
+            content: "Hello".to_string(),
+            tags: None,
+            category: None,
+            description: None,
+            draft: Some(false),
+        };
+        let (slug, metadata, path) = prepare_metadata(Arc::clone(&store), &payload)
+            .await
+            .unwrap();
+        persist_article(
+            Arc::clone(&store),
+            &slug,
+            &metadata,
+            &payload.content,
+            &path,
+        )
+        .await
+        .unwrap();
+        let guard = store.read().await;
+        assert!(guard.get_by_slug(&slug).is_some());
+        std::env::set_current_dir(original).unwrap();
+    }
+
+    #[test]
+    fn test_build_response() {
+        let resp = build_response("slug");
+        assert_eq!(
+            resp.0,
+            json!({"slug": "slug", "message": "Article created"})
+        );
     }
 }
