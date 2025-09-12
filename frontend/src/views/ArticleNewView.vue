@@ -44,6 +44,18 @@
         </el-select>
       </el-form-item>
 
+      <el-form-item label="内容">
+        <el-button size="small" @click="isPreview = !isPreview" style="margin-bottom: 10px">
+          {{ isPreview ? '编辑' : '预览' }}
+        </el-button>
+        <textarea
+          v-if="!isPreview"
+          v-model="form.content"
+          class="editor"
+        ></textarea>
+        <div v-else v-html="previewHTML" class="preview"></div>
+      </el-form-item>
+
       <el-form-item>
         <el-button type="primary" @click="submit">提交</el-button>
       </el-form-item>
@@ -52,15 +64,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import MarkdownIt from 'markdown-it'
+import DOMPurify from 'dompurify'
 
 const form = ref({
   title: '',
   description: '',
   tags: [],
-  category: ''
+  category: '',
+  content: ''
 })
+
+const isPreview = ref(false)
+const md = new MarkdownIt()
+const previewHTML = computed(() =>
+  DOMPurify.sanitize(md.render(form.value.content || ''))
+)
 
 const tagOptions = ref([])
 const categoryOptions = ref([])
@@ -105,6 +126,21 @@ async function submit() {
 .article-new {
   max-width: 600px;
   margin: 0 auto;
+}
+
+.editor {
+  width: 100%;
+  min-height: 200px;
+  padding: 10px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+}
+
+.preview {
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+  padding: 10px;
+  min-height: 200px;
 }
 </style>
 
