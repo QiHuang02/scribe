@@ -16,6 +16,7 @@ pub const ERR_EMPTY_SEARCH_QUERY: &str = "ERR_EMPTY_SEARCH_QUERY";
 #[allow(dead_code)]
 pub const ERR_INVALID_SESSION: &str = "ERR_INVALID_SESSION";
 pub const ERR_UNAUTHORIZED: &str = "ERR_UNAUTHORIZED";
+pub const ERR_FORBIDDEN: &str = "ERR_FORBIDDEN";
 
 #[derive(Debug)]
 pub enum AppError {
@@ -23,6 +24,7 @@ pub enum AppError {
     BadRequest { code: &'static str, message: String },
     InternalServerError { code: &'static str, message: String },
     Unauthorized { code: &'static str, message: String },
+    Forbidden { code: &'static str, message: String },
 }
 
 impl IntoResponse for AppError {
@@ -34,6 +36,7 @@ impl IntoResponse for AppError {
                 (StatusCode::INTERNAL_SERVER_ERROR, code, message)
             }
             AppError::Unauthorized { code, message } => (StatusCode::UNAUTHORIZED, code, message),
+            AppError::Forbidden { code, message } => (StatusCode::FORBIDDEN, code, message),
         };
 
         error!(error_code = code, message = %message);
