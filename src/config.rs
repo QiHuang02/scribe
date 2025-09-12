@@ -70,8 +70,10 @@ impl Config {
             return Err("Cache TTL must be greater than 0".to_string());
         }
 
-        if self.github_redirect_url.trim().is_empty() {
-            return Err("GitHub redirect URL cannot be empty".to_string());
+        if self.enable_comments && self.github_redirect_url.trim().is_empty() {
+            return Err(
+                "GitHub redirect URL cannot be empty when comments are enabled".to_string(),
+            );
         }
 
         if self.base_url.trim().is_empty() {
@@ -116,8 +118,10 @@ pub fn initialize_config() -> Result<Arc<Config>, Box<dyn std::error::Error>> {
         .map_err(|e| format!("Configuration validation failed: {}", e))?;
     // Validate required environment variables using their respective helpers
     get_admin_token_hash()?;
-    get_github_client_id()?;
-    get_github_client_secret()?;
+    if config.enable_comments {
+        get_github_client_id()?;
+        get_github_client_secret()?;
+    }
     Ok(Arc::new(config))
 }
 
