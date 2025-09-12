@@ -65,9 +65,25 @@ async function doSearch() {
   controller = localController
   loading.value = true
   try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, {
+    let res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, {
       signal: localController.signal,
     })
+
+    if (res.status === 400) {
+      res = await fetch(
+        `/api/articles?q=${encodeURIComponent(q)}&limit=20`,
+        { signal: localController.signal }
+      )
+      if (!res.ok) throw new Error(`Request failed with status ${res.status}`)
+      const data = await res.json()
+      results.value = (data.articles || []).map(a => ({
+        slug: a.slug,
+        title: a.metadata.title,
+      }))
+      error.value = ''
+      return
+    }
+
     if (!res.ok) throw new Error(`Request failed with status ${res.status}`)
     const data = await res.json()
     results.value = data.results || []
