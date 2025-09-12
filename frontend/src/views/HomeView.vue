@@ -1,6 +1,5 @@
 <template>
   <div class="home">
-    <h1>Articles</h1>
     <ul v-if="articles.length">
       <li v-for="a in articles" :key="a.slug">
         <router-link :to="`/articles/${a.slug}`">{{ a.metadata.title }}</router-link>
@@ -38,3 +37,11 @@ const fetchArticles = async () => {
 
 watch(() => route.query, fetchArticles, { immediate: true })
 </script>
+
+<style scoped>
+.home ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+</style>

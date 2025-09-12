@@ -1,6 +1,5 @@
 <template>
   <div class="tags">
-    <h1>Tags</h1>
     <ul v-if="tags.length">
       <li v-for="t in tags" :key="t">
         <router-link :to="{ name: 'home', query: { tag: t } }">{{ t }}</router-link>
@@ -27,3 +26,11 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.tags ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+</style>

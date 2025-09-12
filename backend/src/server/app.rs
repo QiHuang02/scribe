@@ -112,7 +112,7 @@ async fn log_errors(req: Request<Body>, next: Next) -> Response {
 }
 
 async fn watch_articles(state: Arc<AppState>) {
-    let (tx, mut rx) = mpsc::channel(10);
+    let (tx, mut rx) = mpsc::unbounded_channel();
 
     let tx_watcher = tx.clone();
     let mut watcher =
@@ -120,12 +120,9 @@ async fn watch_articles(state: Arc<AppState>) {
             if let Ok(event) = res
                 && (event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove())
             {
-                let tx = tx_watcher.clone();
-                tokio::spawn(async move {
-                    if tx.send(()).await.is_err() {
-                        error!("File change notification receiver dropped");
-                    }
-                });
+                if tx_watcher.send(()).is_err() {
+                    error!("File change notification receiver dropped");
+                }
             }
         }) {
             Ok(w) => w,
