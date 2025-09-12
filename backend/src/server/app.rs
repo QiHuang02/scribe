@@ -42,7 +42,7 @@ pub async fn create_app_state(
                 let mut all = article_store.load_full_articles();
                 let mut notes = note_store.load_full_articles();
                 for n in &mut notes {
-                    n.slug = format!("notes/{}", n.slug);
+                    n.slug = format!("notes/{}", n.slug_with_category());
                 }
                 all.extend(notes);
                 if let Err(e) = service.index_articles(&all, config.search_index_heap_size) {
@@ -271,7 +271,7 @@ async fn reindex_all_content(state: &Arc<AppState>) {
         let mut notes = notes_store.load_full_articles();
         drop(notes_store);
         for n in &mut notes {
-            n.slug = format!("notes/{}", n.slug);
+            n.slug = format!("notes/{}", n.slug_with_category());
         }
         all.extend(notes);
         if let Err(e) = search_service.index_articles(&all, state.config.search_index_heap_size) {

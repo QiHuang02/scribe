@@ -133,12 +133,15 @@ async fn search_articles(
 
                 notes
                     .into_iter()
-                    .map(|note| SearchResult {
-                        slug: format!("notes/{}", note.slug),
-                        title: note.metadata.title.clone(),
-                        description: note.metadata.description.clone(),
-                        score: 1.0,
-                        highlights: None,
+                    .map(|note| {
+                        let slug = note.slug_with_category();
+                        SearchResult {
+                            slug: format!("notes/{}", slug),
+                            title: note.metadata.title.clone(),
+                            description: note.metadata.description.clone(),
+                            score: 1.0,
+                            highlights: None,
+                        }
                     })
                     .collect()
             };

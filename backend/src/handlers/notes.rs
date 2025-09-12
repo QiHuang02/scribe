@@ -33,7 +33,7 @@ fn default_limit() -> usize {
 pub fn create_router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/notes", get(get_notes_list))
-        .route("/api/notes/{slug}", get(get_note_by_slug))
+        .route("/api/notes/*path", get(get_note_by_slug))
 }
 
 async fn get_notes_list(
@@ -77,7 +77,7 @@ async fn get_notes_list(
                     .load_content_for(note)
                     .unwrap_or_else(|_| String::new());
                 ArticleRepresentation::Full(ArticleContent {
-                    slug: note.slug.clone(),
+                    slug: note.slug_with_category(),
                     metadata: note.metadata.clone(),
                     content,
                 })
@@ -92,7 +92,7 @@ async fn get_notes_list(
         let teasers = paginated
             .map(|note| {
                 ArticleRepresentation::Teaser(ArticleTeaser {
-                    slug: note.slug.clone(),
+                    slug: note.slug_with_category(),
                     metadata: note.metadata.clone(),
                 })
             })
@@ -109,10 +109,19 @@ async fn get_notes_list(
 
 async fn get_note_by_slug(
     State(state): State<Arc<AppState>>,
-    Path(slug): Path<String>,
+    Path(path): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let store = state.note_store.read().await;
-    let note = store.get_by_slug(&slug);
+
+    let (category, slug) = match path.rsplit_once('/') {
+        Some((cat, slug)) => (Some(cat.to_string()), slug.to_string()),
+        None => (None, path.clone()),
+    };
+
+    let note = store
+        .query(|n| n.slug == slug && n.metadata.category.as_deref() == category.as_deref())
+        .into_iter()
+        .next();
 
     match note {
         Some(note) if !note.metadata.draft => {
@@ -123,18 +132,14 @@ async fn get_note_by_slug(
                     message: e.to_string(),
                 })?;
             Ok(Json(ArticleContent {
-                slug: note.slug.clone(),
+                slug: note.slug_with_category(),
                 metadata: note.metadata.clone(),
                 content,
             }))
         }
-        Some(_) => Err(AppError::NotFound {
+        _ => Err(AppError::NotFound {
             code: ERR_NOTE_NOT_FOUND,
-            message: format!("Note with slug {} not found", slug),
-        }),
-        None => Err(AppError::NotFound {
-            code: ERR_NOTE_NOT_FOUND,
-            message: format!("Note with slug {} not found", slug),
+            message: format!("Note with slug {} not found", path),
         }),
     }
 }
