@@ -11,7 +11,7 @@ use crate::services::article_service::save_version;
 use axum::extract::{Path, Query, State};
 use axum::middleware;
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use chrono::Utc;
 use serde::Deserialize;
@@ -44,6 +44,16 @@ pub struct CreateArticleRequest {
     pub draft: Option<bool>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct UpdateArticleRequest {
+    pub title: String,
+    pub content: String,
+    pub tags: Option<Vec<String>>,
+    pub category: Option<String>,
+    pub description: Option<String>,
+    pub draft: Option<bool>,
+}
+
 fn default_page() -> usize {
     1
 }
@@ -60,6 +70,10 @@ pub fn create_router() -> Router<Arc<AppState>> {
             post(create_article).route_layer(middleware::from_fn(require_admin)),
         )
         .route("/api/articles/{slug}", get(get_article_by_slug))
+        .route(
+            "/api/articles/{slug}",
+            put(update_article).route_layer(middleware::from_fn(require_admin)),
+        )
 }
 
 async fn get_articles_list(
@@ -263,6 +277,107 @@ async fn create_article(
     state.cache.invalidate_all();
 
     Ok(Json(json!({ "slug": slug, "message": "Article created" })))
+}
+
+async fn update_article(
+    State(state): State<Arc<AppState>>,
+    Path(slug): Path<String>,
+    Json(payload): Json<UpdateArticleRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    if payload.title.trim().is_empty() || payload.content.trim().is_empty() {
+        return Err(AppError::BadRequest {
+            code: ERR_BAD_REQUEST,
+            message: "Title and content cannot be empty".to_string(),
+        });
+    }
+
+    let existing = {
+        let store = state.store.read().await;
+        store.get_by_slug(&slug).cloned()
+    };
+
+    let mut existing_article = existing.ok_or_else(|| AppError::NotFound {
+        code: ERR_ARTICLE_NOT_FOUND,
+        message: format!("Article with slug {} not found", slug),
+    })?;
+
+    let metadata = Metadata {
+        title: payload.title.clone(),
+        author: existing_article.metadata.author.clone(),
+        date: existing_article.metadata.date,
+        tags: payload
+            .tags
+            .clone()
+            .unwrap_or(existing_article.metadata.tags.clone()),
+        description: payload
+            .description
+            .clone()
+            .unwrap_or(existing_article.metadata.description.clone()),
+        draft: payload.draft.unwrap_or(existing_article.metadata.draft),
+        last_updated: Some(Utc::now().to_rfc3339()),
+        category: payload
+            .category
+            .clone()
+            .or(existing_article.metadata.category.clone()),
+    };
+
+    let dir_path = if let Some(ref cat) = metadata.category {
+        format!("{}/{}", ARTICLE_DIR, cat)
+    } else {
+        ARTICLE_DIR.to_string()
+    };
+
+    if let Err(e) = fs::create_dir_all(&dir_path) {
+        return Err(AppError::InternalServerError {
+            code: ERR_INTERNAL_SERVER,
+            message: e.to_string(),
+        });
+    }
+
+    let file_path = StdPath::new(&dir_path).join(format!("{}.md", slug));
+    let front_matter =
+        serde_yaml::to_string(&metadata).map_err(|e| AppError::InternalServerError {
+            code: ERR_INTERNAL_SERVER,
+            message: e.to_string(),
+        })?;
+    let content = format!("---\n{}---\n\n{}", front_matter, payload.content);
+    fs::write(&file_path, content).map_err(|e| AppError::InternalServerError {
+        code: ERR_INTERNAL_SERVER,
+        message: e.to_string(),
+    })?;
+
+    let last_modified = fs::metadata(&file_path)
+        .and_then(|m| m.modified())
+        .unwrap_or(SystemTime::now());
+
+    existing_article.metadata = metadata.clone();
+    existing_article.file_path = file_path.to_string_lossy().to_string();
+    existing_article.updated_at = Utc::now();
+    existing_article.last_modified = last_modified;
+
+    save_version(&existing_article).map_err(|e| AppError::InternalServerError {
+        code: ERR_INTERNAL_SERVER,
+        message: e.to_string(),
+    })?;
+
+    {
+        let mut store = state.store.write().await;
+        if let Err(e) = store.update_single_article(
+            &existing_article.file_path,
+            ARTICLE_DIR,
+            ENABLE_NESTED_CATEGORIES,
+        ) {
+            return Err(AppError::InternalServerError {
+                code: ERR_INTERNAL_SERVER,
+                message: e.to_string(),
+            });
+        }
+    }
+
+    reindex_all_content(&state).await;
+    state.cache.invalidate_all();
+
+    Ok(Json(json!({ "slug": slug, "message": "Article updated" })))
 }
 
 async fn get_article_by_slug(

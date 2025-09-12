@@ -228,7 +228,7 @@ impl ArticleStore {
         Ok(())
     }
 
-    fn update_single_article(
+    pub fn update_single_article(
         &mut self,
         file_path: &str,
         content_dir: &str,
