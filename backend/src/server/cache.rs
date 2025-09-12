@@ -5,15 +5,18 @@ use std::task::{Context, Poll};
 
 use axum::body::{Body, to_bytes};
 use axum::http::{self, Method, Request, Response};
+use bytes::Bytes;
 use moka2::future::Cache;
 use tower::{Layer, Service};
 
 // Routes that should never be cached (e.g. authentication endpoints).
 const CACHE_BYPASS_PATHS: &[&str] = &["/api/auth/"];
+/// Maximum response body size that will be cached (1 MiB).
+const MAX_CACHED_RESPONSE_SIZE: usize = 1 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct CachedResponse {
-    pub body: String,
+    pub body: Bytes,
     pub content_type: Option<String>,
 }
 
@@ -100,10 +103,16 @@ where
 
             let resp = inner.call(req).await?;
             let (parts, body) = resp.into_parts();
-            let bytes = to_bytes(body, usize::MAX).await.unwrap();
-            let body_str = String::from_utf8(bytes.to_vec()).unwrap();
+            let bytes = match to_bytes(body, MAX_CACHED_RESPONSE_SIZE).await {
+                Ok(b) => b,
+                Err(_) => {
+                    // If the body is too large or an error occurs, return the original parts
+                    // without caching anything.
+                    return Ok(Response::from_parts(parts, Body::empty()));
+                }
+            };
 
-            if parts.status.is_success() {
+            if parts.status.is_success() && bytes.len() <= MAX_CACHED_RESPONSE_SIZE {
                 let content_type = parts
                     .headers
                     .get(axum::http::header::CONTENT_TYPE)
@@ -113,14 +122,14 @@ where
                     .insert(
                         cache_key,
                         CachedResponse {
-                            body: body_str.clone(),
+                            body: bytes.clone(),
                             content_type,
                         },
                     )
                     .await;
             }
 
-            Ok(Response::from_parts(parts, Body::from(body_str)))
+            Ok(Response::from_parts(parts, Body::from(bytes)))
         })
     }
 }
