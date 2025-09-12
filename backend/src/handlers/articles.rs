@@ -52,7 +52,7 @@ async fn get_articles_list(
         }
         if let Some(query) = &params.q {
             if let Some(ref search_service) = state.search_service {
-                match search_service.search(query, 1000, false) {
+                match search_service.search(query, 1000, false).await {
                     Ok(search_results) => {
                         let search_slugs: std::collections::HashSet<String> =
                             search_results.into_iter().map(|r| r.slug).collect();

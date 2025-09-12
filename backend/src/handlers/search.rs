@@ -61,7 +61,7 @@ async fn search_articles(
         });
     }
 
-    match search_service.search(&params.q, limit, highlights) {
+    match search_service.search(&params.q, limit, highlights).await {
         Ok(results) => {
             let response = SearchResponse {
                 total_found: results.len(),
@@ -128,7 +128,7 @@ async fn get_popular_searches(
             message: "Full-text search is not enabled".to_string(),
         })?;
 
-    let popular_searches = search_service.get_popular_searches(10);
+    let popular_searches = search_service.get_popular_searches(10).await;
     let searches: Vec<PopularSearch> = popular_searches
         .into_iter()
         .map(|(query, count)| PopularSearch { query, count })
