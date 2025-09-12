@@ -37,3 +37,11 @@ const fetchArticles = async () => {
 
 watch(() => route.query, fetchArticles, { immediate: true })
 </script>
+
+<style scoped>
+.home ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+</style>

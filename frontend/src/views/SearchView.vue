@@ -125,3 +125,11 @@ async function loadPopular() {
   }
 }
 </script>
+
+<style scoped>
+.search ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+</style>
