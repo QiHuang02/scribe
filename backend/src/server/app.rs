@@ -114,18 +114,34 @@ async fn log_errors(req: Request<Body>, next: Next) -> Response {
 async fn watch_articles(state: Arc<AppState>) {
     let (tx, mut rx) = mpsc::channel(10);
 
-    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-        if let Ok(event) = res
-            && (event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove())
-        {
-            tx.blocking_send(()).unwrap();
-        }
-    })
-    .unwrap();
+    let tx_watcher = tx.clone();
+    let mut watcher =
+        match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res
+                && (event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove())
+            {
+                let tx = tx_watcher.clone();
+                tokio::spawn(async move {
+                    if tx.send(()).await.is_err() {
+                        error!("File change notification receiver dropped");
+                    }
+                });
+            }
+        }) {
+            Ok(w) => w,
+            Err(e) => {
+                error!("Failed to initialize file watcher: {:?}", e);
+                return;
+            }
+        };
 
-    watcher
-        .watch(state.config.article_dir.as_ref(), RecursiveMode::Recursive)
-        .unwrap();
+    if let Err(e) = watcher.watch(state.config.article_dir.as_ref(), RecursiveMode::Recursive) {
+        error!(
+            "Failed to watch directory '{}': {:?}",
+            state.config.article_dir, e
+        );
+        return;
+    }
 
     info!("Hot reloading enable for '{}'", state.config.article_dir);
 
