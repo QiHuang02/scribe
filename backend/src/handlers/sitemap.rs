@@ -13,7 +13,7 @@ pub fn create_router() -> Router<Arc<AppState>> {
 
 async fn get_sitemap(State(state): State<Arc<AppState>>) -> Result<Response, AppError> {
     let store = state.store.read().await;
-    let base_url = state.config.base_url.trim_end_matches('/');
+    let hostname = state.config.hostname.trim_end_matches('/');
     let articles = store.query(|a| !a.metadata.draft);
 
     let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
@@ -22,7 +22,7 @@ async fn get_sitemap(State(state): State<Arc<AppState>>) -> Result<Response, App
     for article in articles {
         xml.push_str(&format!(
             "<url><loc>{}/articles/{}</loc><lastmod>{}</lastmod></url>",
-            base_url,
+            hostname,
             article.slug,
             article.updated_at.to_rfc3339()
         ));

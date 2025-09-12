@@ -1,4 +1,7 @@
-use crate::config::{Config, ARTICLE_DIR, NOTES_DIR};
+use crate::config::{
+    Config, ARTICLE_DIR, NOTES_DIR, CACHE_MAX_CAPACITY, CACHE_TTL_SECONDS, ENABLE_NESTED_CATEGORIES,
+    SERVER_ADDR,
+};
 use crate::server::cache::{CachedResponse, ResponseCacheLayer};
 use crate::services::search::SearchService;
 use crate::services::service::ArticleStore;
@@ -29,11 +32,11 @@ pub struct AppState {
 pub async fn create_app_state(
     config: &Arc<Config>,
 ) -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
-    let article_store = ArticleStore::new(ARTICLE_DIR, config.enable_nested_categories)?;
+    let article_store = ArticleStore::new(ARTICLE_DIR, ENABLE_NESTED_CATEGORIES)?;
     let note_store = ArticleStore::new(NOTES_DIR, true)?;
     let cache = Cache::builder()
-        .max_capacity(config.cache_max_capacity)
-        .time_to_live(Duration::from_secs(config.cache_ttl_seconds))
+        .max_capacity(CACHE_MAX_CAPACITY)
+        .time_to_live(Duration::from_secs(CACHE_TTL_SECONDS))
         .build();
 
     let search_service = if config.enable_full_text_search {
@@ -96,7 +99,7 @@ pub async fn start_server(
         .merge(crate::handlers::search::create_router())
         .merge(crate::handlers::sitemap::create_router());
 
-    if config.enable_comments {
+    if config.comments {
         app = app
             .merge(crate::handlers::auth::create_router())
             .merge(crate::handlers::comments::create_router());
@@ -107,7 +110,7 @@ pub async fn start_server(
         .layer(ResponseCacheLayer::new(app_state.cache.clone()))
         .with_state(app_state);
 
-    let addr: SocketAddr = config.server_addr.parse()?;
+    let addr: SocketAddr = SERVER_ADDR.parse()?;
     info!("Starting server on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
@@ -161,7 +164,7 @@ async fn watch_articles(state: Arc<AppState>) {
 
         match store_guard.incremental_update(
             ARTICLE_DIR,
-            state.config.enable_nested_categories,
+            ENABLE_NESTED_CATEGORIES,
         ) {
             Ok(true) => {
                 reindex_all_content(&state).await;
@@ -174,10 +177,7 @@ async fn watch_articles(state: Arc<AppState>) {
             Err(e) => {
                 tracing::error!("Error during incremental update: {:?}", e);
                 info!("Falling back to full reload...");
-                match ArticleStore::new(
-                    ARTICLE_DIR,
-                    state.config.enable_nested_categories,
-                ) {
+                match ArticleStore::new(ARTICLE_DIR, ENABLE_NESTED_CATEGORIES) {
                     Ok(new_store) => {
                         *store_guard = new_store;
 
