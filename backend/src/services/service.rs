@@ -134,9 +134,11 @@ impl ArticleStore {
         for change in changes {
             match change.change_type {
                 FileChange::Added | FileChange::Modified => {
-                    if let Err(e) =
-                        self.update_single_article(&change.path, enable_nested_categories)
-                    {
+                    if let Err(e) = self.update_single_article(
+                        &change.path,
+                        content_dir,
+                        enable_nested_categories,
+                    ) {
                         tracing::warn!("Failed to update article {}: {:?}", change.path, e);
                         continue;
                     }
@@ -211,19 +213,13 @@ impl ArticleStore {
     fn update_single_article(
         &mut self,
         file_path: &str,
+        content_dir: &str,
         enable_nested_categories: bool,
     ) -> Result<(), LoadError> {
         self.content_cache.lock().unwrap().remove(file_path);
         let path = Path::new(file_path);
 
         let category = if enable_nested_categories {
-            let content_dir = file_path
-                .split('/')
-                .next()
-                .unwrap_or("")
-                .split('\\')
-                .next()
-                .unwrap_or("");
             self.calculate_category_from_path(path, content_dir)
         } else {
             None
@@ -234,6 +230,7 @@ impl ArticleStore {
         Self::process_article_file(
             path,
             category.as_deref(),
+            content_dir,
             &mut temp_articles,
             &mut temp_tags,
         )?;
@@ -341,7 +338,7 @@ impl ArticleStore {
             let path = entry?.path();
 
             if path.is_file() && path.extension().is_some_and(|s| s == "md") {
-                Self::process_article_file(&path, None, articles, all_tags)?;
+                Self::process_article_file(&path, None, content_dir, articles, all_tags)?;
             }
         }
         Ok(())
@@ -366,7 +363,13 @@ impl ArticleStore {
                     all_categories.insert(cat.clone());
                 }
 
-                Self::process_article_file(path, category.as_deref(), articles, all_tags)?;
+                Self::process_article_file(
+                    path,
+                    category.as_deref(),
+                    content_dir,
+                    articles,
+                    all_tags,
+                )?;
             }
         }
         Ok(())
@@ -375,6 +378,7 @@ impl ArticleStore {
     fn process_article_file(
         path: &Path,
         category: Option<&str>,
+        content_root: &str,
         articles: &mut Vec<Article>,
         all_tags: &mut HashSet<String>,
     ) -> Result<(), LoadError> {
@@ -420,7 +424,7 @@ impl ArticleStore {
             .and_then(|m| m.modified())
             .unwrap_or(SystemTime::UNIX_EPOCH);
         let updated_at: DateTime<Utc> = last_modified.into();
-        let version_dir = format!("data/articles/{}/versions", slug);
+        let version_dir = format!("{}/{}/versions", content_root, slug);
         let version = fs::read_dir(&version_dir)
             .map(|rd| rd.count() as u32 + 1)
             .unwrap_or(1);

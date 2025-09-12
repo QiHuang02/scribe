@@ -19,6 +19,7 @@ use tracing::{error, info};
 
 pub struct AppState {
     pub store: Arc<RwLock<ArticleStore>>,
+    pub note_store: Arc<RwLock<ArticleStore>>,
     pub config: Arc<Config>,
     pub search_service: Option<Arc<SearchService>>,
     pub cache: Arc<Cache<String, CachedResponse>>,
@@ -29,6 +30,7 @@ pub async fn create_app_state(
     config: &Arc<Config>,
 ) -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
     let article_store = ArticleStore::new(&config.article_dir, config.enable_nested_categories)?;
+    let note_store = ArticleStore::new(&config.notes_dir, true)?;
     let cache = Cache::builder()
         .max_capacity(config.cache_max_capacity)
         .time_to_live(Duration::from_secs(config.cache_ttl_seconds))
@@ -37,8 +39,13 @@ pub async fn create_app_state(
     let search_service = if config.enable_full_text_search {
         match SearchService::new(&config.search_index_dir) {
             Ok(service) => {
-                let articles = article_store.load_full_articles();
-                if let Err(e) = service.index_articles(&articles, config.search_index_heap_size) {
+                let mut all = article_store.load_full_articles();
+                let mut notes = note_store.load_full_articles();
+                for n in &mut notes {
+                    n.slug = format!("notes/{}", n.slug_with_category());
+                }
+                all.extend(notes);
+                if let Err(e) = service.index_articles(&all, config.search_index_heap_size) {
                     tracing::warn!("Failed to index articles: {:?}", e);
                     None
                 } else {
@@ -61,6 +68,7 @@ pub async fn create_app_state(
 
     Ok(Arc::new(AppState {
         store: Arc::new(RwLock::new(article_store)),
+        note_store: Arc::new(RwLock::new(note_store)),
         config: Arc::clone(config),
         search_service,
         cache: Arc::new(cache),
@@ -69,7 +77,9 @@ pub async fn create_app_state(
 }
 
 pub fn start_file_watcher(app_state: Arc<AppState>) {
-    tokio::spawn(watch_articles(app_state));
+    let article_state = Arc::clone(&app_state);
+    tokio::spawn(watch_articles(article_state));
+    tokio::spawn(watch_notes(app_state));
 }
 
 pub async fn start_server(
@@ -79,6 +89,7 @@ pub async fn start_server(
     let mut app = Router::new()
         .merge(crate::handlers::root::create_router())
         .merge(crate::handlers::articles::create_router())
+        .merge(crate::handlers::notes::create_router())
         .merge(crate::handlers::article_versions::create_router())
         .merge(crate::handlers::tags::create_router())
         .merge(crate::handlers::categories::create_router())
@@ -153,7 +164,7 @@ async fn watch_articles(state: Arc<AppState>) {
             state.config.enable_nested_categories,
         ) {
             Ok(true) => {
-                reindex_articles_with_logging(&state, &store_guard);
+                reindex_all_content(&state).await;
                 state.cache.invalidate_all();
                 info!("Articles updated incrementally!");
             }
@@ -170,7 +181,7 @@ async fn watch_articles(state: Arc<AppState>) {
                     Ok(new_store) => {
                         *store_guard = new_store;
 
-                        reindex_articles_with_logging(&state, &store_guard);
+                        reindex_all_content(&state).await;
                         state.cache.invalidate_all();
 
                         info!("Full reload completed successfully!");
@@ -184,12 +195,86 @@ async fn watch_articles(state: Arc<AppState>) {
     }
 }
 
-fn reindex_articles_with_logging(state: &Arc<AppState>, store: &ArticleStore) {
+async fn watch_notes(state: Arc<AppState>) {
+    let (tx, mut rx) = mpsc::unbounded_channel();
+
+    let tx_watcher = tx.clone();
+    let mut watcher =
+        match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res
+                && (event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove())
+            {
+                if tx_watcher.send(()).is_err() {
+                    error!("File change notification receiver dropped");
+                }
+            }
+        }) {
+            Ok(w) => w,
+            Err(e) => {
+                error!("Failed to initialize file watcher: {:?}", e);
+                return;
+            }
+        };
+
+    if let Err(e) = watcher.watch(state.config.notes_dir.as_ref(), RecursiveMode::Recursive) {
+        error!(
+            "Failed to watch directory '{}': {:?}",
+            state.config.notes_dir, e
+        );
+        return;
+    }
+
+    info!("Hot reloading enable for '{}'", state.config.notes_dir);
+
+    while rx.recv().await.is_some() {
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        info!("File change detected, performing incremental update...");
+        let mut store_guard = state.note_store.write().await;
+
+        match store_guard.incremental_update(&state.config.notes_dir, true) {
+            Ok(true) => {
+                reindex_all_content(&state).await;
+                state.cache.invalidate_all();
+                info!("Notes updated incrementally!");
+            }
+            Ok(false) => {
+                tracing::debug!("No file changes detected, skipping update");
+            }
+            Err(e) => {
+                tracing::error!("Error during incremental update: {:?}", e);
+                info!("Falling back to full reload...");
+                match ArticleStore::new(&state.config.notes_dir, true) {
+                    Ok(new_store) => {
+                        *store_guard = new_store;
+
+                        reindex_all_content(&state).await;
+                        state.cache.invalidate_all();
+
+                        info!("Full reload completed successfully!");
+                    }
+                    Err(e) => {
+                        tracing::error!("Full reload also failed: {:?}", e);
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn reindex_all_content(state: &Arc<AppState>) {
     if let Some(ref search_service) = state.search_service {
-        let articles = store.load_full_articles();
-        if let Err(e) =
-            search_service.index_articles(&articles, state.config.search_index_heap_size)
-        {
+        let store = state.store.read().await;
+        let mut all = store.load_full_articles();
+        drop(store);
+        let notes_store = state.note_store.read().await;
+        let mut notes = notes_store.load_full_articles();
+        drop(notes_store);
+        for n in &mut notes {
+            n.slug = format!("notes/{}", n.slug_with_category());
+        }
+        all.extend(notes);
+        if let Err(e) = search_service.index_articles(&all, state.config.search_index_heap_size) {
             tracing::warn!("Failed to reindex articles for search: {:?}", e);
         } else {
             info!("Search index updated successfully!");

@@ -57,3 +57,23 @@ pub struct PaginatedArticles<T> {
     pub total_pages: usize,
     pub current_page: usize,
 }
+
+impl Article {
+    pub fn slug_with_category(&self) -> String {
+        if let Some(cat) = &self.metadata.category {
+            format!("{}/{}", cat, self.slug)
+        } else {
+            self.slug.clone()
+        }
+    }
+}
+
+impl ArticleContent {
+    pub fn slug_with_category(&self) -> String {
+        if let Some(cat) = &self.metadata.category {
+            format!("{}/{}", cat, self.slug)
+        } else {
+            self.slug.clone()
+        }
+    }
+}

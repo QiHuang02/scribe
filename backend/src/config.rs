@@ -11,6 +11,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 #[derive(Deserialize, Debug)]
 pub struct Config {
     pub article_dir: String,
+    #[serde(default = "default_notes_dir")]
+    pub notes_dir: String,
     pub log_level: String,
     pub server_addr: String,
     pub base_url: String,
@@ -40,6 +42,13 @@ impl Config {
             return Err(format!(
                 "Article directory does not exist: {}",
                 self.article_dir
+            ));
+        }
+
+        if !Path::new(&self.notes_dir).exists() {
+            return Err(format!(
+                "Notes directory does not exist: {}",
+                self.notes_dir
             ));
         }
 
@@ -102,6 +111,10 @@ fn default_cache_max_capacity() -> u64 {
 
 fn default_cache_ttl_seconds() -> u64 {
     60
+}
+
+fn default_notes_dir() -> String {
+    "notes".to_string()
 }
 
 pub fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
