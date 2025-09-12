@@ -194,14 +194,15 @@ impl SearchService {
     fn create_simple_highlights(&self, query: &str, title: &str, description: &str) -> Vec<String> {
         let mut highlights = Vec::new();
         let query_lower = query.to_lowercase();
+        let title_lower = title.to_lowercase();
+        let description_lower = description.to_lowercase();
 
-        if title.to_lowercase().contains(&query_lower) {
+        if title_lower.contains(&query_lower) {
             highlights.push(format!("Title: {}", title));
         }
 
-        if description.to_lowercase().contains(&query_lower) {
-            let desc_lower = description.to_lowercase();
-            if let Some(pos) = desc_lower.find(&query_lower) {
+        if description_lower.contains(&query_lower) {
+            if let Some(pos) = description_lower.find(&query_lower) {
                 let start = pos.saturating_sub(50);
                 let end = std::cmp::min(pos + query.len() + 50, description.len());
                 let snippet = &description[start..end];
