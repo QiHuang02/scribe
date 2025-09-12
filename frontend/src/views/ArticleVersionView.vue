@@ -1,21 +1,28 @@
 <template>
   <div class="article-version">
     <h1 v-if="versionData">Version {{ version }} of {{ slug }}</h1>
-    <pre v-if="versionData">{{ versionData.content }}</pre>
+    <div v-if="versionData" v-html="sanitizedHtml"></div>
     <p v-else-if="error">{{ error }}</p>
     <p v-else>Loading...</p>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const route = useRoute()
 const slug = route.params.slug
 const version = route.params.version
 const versionData = ref(null)
 const error = ref('')
+
+const sanitizedHtml = computed(() => {
+  if (!versionData.value) return ''
+  return DOMPurify.sanitize(marked.parse(versionData.value.content || ''))
+})
 
 async function load() {
   try {
