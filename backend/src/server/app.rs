@@ -2,9 +2,10 @@ use crate::config::{
     ARTICLE_DIR, CACHE_MAX_CAPACITY, CACHE_TTL_SECONDS, Config, ENABLE_NESTED_CATEGORIES,
     NOTES_DIR, SERVER_ADDR,
 };
+use crate::models::article::ArticleContent;
 use crate::server::cache::{CachedResponse, ResponseCacheLayer};
 use crate::services::search::SearchService;
-use crate::services::service::ArticleStore;
+use crate::services::service::{ArticleStore, FileChange};
 use axum::body::Body;
 use axum::middleware::{self, Next};
 use axum::response::Response;
@@ -12,6 +13,7 @@ use axum::{Router, http::Request};
 use cookie::Key;
 use moka2::future::Cache;
 use notify::{RecursiveMode, Watcher};
+use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -159,9 +161,88 @@ async fn watch_articles(state: Arc<AppState>) {
         info!("File change detected, performing incremental update...");
         let mut store_guard = state.store.write().await;
 
+        let changes = match store_guard.detect_file_changes(ARTICLE_DIR, ENABLE_NESTED_CATEGORIES) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("Error detecting file changes: {:?}", e);
+                continue;
+            }
+        };
+
+        if changes.is_empty() {
+            tracing::debug!("No file changes detected, skipping update");
+            continue;
+        }
+
+        let mut removed_map = HashMap::new();
+        for change in &changes {
+            if matches!(change.change_type, FileChange::Removed) {
+                if let Some(article) = store_guard
+                    .query(|a| a.file_path == change.path)
+                    .into_iter()
+                    .next()
+                {
+                    removed_map.insert(change.path.clone(), article.slug.clone());
+                }
+            }
+        }
+
         match store_guard.incremental_update(ARTICLE_DIR, ENABLE_NESTED_CATEGORIES) {
             Ok(true) => {
-                reindex_all_content(&state).await;
+                if let Some(search_service) = &state.search_service {
+                    for change in &changes {
+                        match change.change_type {
+                            FileChange::Added | FileChange::Modified => {
+                                if let Some(article) = store_guard
+                                    .query(|a| a.file_path == change.path)
+                                    .into_iter()
+                                    .next()
+                                {
+                                    match store_guard.load_content_for(article) {
+                                        Ok(content) => {
+                                            let article_content = ArticleContent {
+                                                slug: article.slug.clone(),
+                                                metadata: article.metadata.clone(),
+                                                content,
+                                            };
+                                            if let Err(e) = search_service.index_article(
+                                                &article_content,
+                                                state.config.search_index_heap_size,
+                                            ) {
+                                                tracing::warn!(
+                                                    "Failed to index article {}: {:?}",
+                                                    article.slug,
+                                                    e
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                "Failed to load content for article {}: {:?}",
+                                                article.slug,
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            FileChange::Removed => {
+                                if let Some(slug) = removed_map.get(&change.path) {
+                                    if let Err(e) = search_service
+                                        .remove_article(slug, state.config.search_index_heap_size)
+                                    {
+                                        tracing::warn!(
+                                            "Failed to remove article {}: {:?}",
+                                            slug,
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 state.cache.invalidate_all();
                 info!("Articles updated incrementally!");
             }
@@ -223,9 +304,90 @@ async fn watch_notes(state: Arc<AppState>) {
         info!("File change detected, performing incremental update...");
         let mut store_guard = state.note_store.write().await;
 
+        let changes = match store_guard.detect_file_changes(NOTES_DIR, true) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("Error detecting file changes: {:?}", e);
+                continue;
+            }
+        };
+
+        if changes.is_empty() {
+            tracing::debug!("No file changes detected, skipping update");
+            continue;
+        }
+
+        let mut removed_map = HashMap::new();
+        for change in &changes {
+            if matches!(change.change_type, FileChange::Removed) {
+                if let Some(article) = store_guard
+                    .query(|a| a.file_path == change.path)
+                    .into_iter()
+                    .next()
+                {
+                    removed_map.insert(
+                        change.path.clone(),
+                        format!("notes/{}", article.slug_with_category()),
+                    );
+                }
+            }
+        }
+
         match store_guard.incremental_update(NOTES_DIR, true) {
             Ok(true) => {
-                reindex_all_content(&state).await;
+                if let Some(search_service) = &state.search_service {
+                    for change in &changes {
+                        match change.change_type {
+                            FileChange::Added | FileChange::Modified => {
+                                if let Some(article) = store_guard
+                                    .query(|a| a.file_path == change.path)
+                                    .into_iter()
+                                    .next()
+                                {
+                                    match store_guard.load_content_for(article) {
+                                        Ok(content) => {
+                                            let article_content = ArticleContent {
+                                                slug: format!(
+                                                    "notes/{}",
+                                                    article.slug_with_category()
+                                                ),
+                                                metadata: article.metadata.clone(),
+                                                content,
+                                            };
+                                            if let Err(e) = search_service.index_article(
+                                                &article_content,
+                                                state.config.search_index_heap_size,
+                                            ) {
+                                                tracing::warn!(
+                                                    "Failed to index note {}: {:?}",
+                                                    article.slug,
+                                                    e
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                "Failed to load content for note {}: {:?}",
+                                                article.slug,
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            FileChange::Removed => {
+                                if let Some(slug) = removed_map.get(&change.path) {
+                                    if let Err(e) = search_service
+                                        .remove_article(slug, state.config.search_index_heap_size)
+                                    {
+                                        tracing::warn!("Failed to remove note {}: {:?}", slug, e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 state.cache.invalidate_all();
                 info!("Notes updated incrementally!");
             }
