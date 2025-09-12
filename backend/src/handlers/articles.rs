@@ -62,6 +62,31 @@ fn default_limit() -> usize {
     10
 }
 
+fn write_article_to_file(
+    metadata: &Metadata,
+    content: &str,
+    file_path: &StdPath,
+) -> Result<(), AppError> {
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| AppError::InternalServerError {
+            code: ERR_INTERNAL_SERVER,
+            message: e.to_string(),
+        })?;
+    }
+
+    let front_matter =
+        serde_yaml::to_string(metadata).map_err(|e| AppError::InternalServerError {
+            code: ERR_INTERNAL_SERVER,
+            message: e.to_string(),
+        })?;
+    let file_content = format!("---\n{}---\n\n{}", front_matter, content);
+    fs::write(file_path, file_content).map_err(|e| AppError::InternalServerError {
+        code: ERR_INTERNAL_SERVER,
+        message: e.to_string(),
+    })?;
+    Ok(())
+}
+
 pub fn create_router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/articles", get(get_articles_list))
@@ -220,31 +245,15 @@ async fn create_article(
         last_updated: None,
         category: payload.category.clone(),
     };
-
-    let dir_path = if let Some(ref cat) = payload.category {
-        format!("{}/{}", ARTICLE_DIR, cat)
+    let file_path = if let Some(ref cat) = payload.category {
+        StdPath::new(ARTICLE_DIR)
+            .join(cat)
+            .join(format!("{}.md", slug))
     } else {
-        ARTICLE_DIR.to_string()
+        StdPath::new(ARTICLE_DIR).join(format!("{}.md", slug))
     };
 
-    if let Err(e) = fs::create_dir_all(&dir_path) {
-        return Err(AppError::InternalServerError {
-            code: ERR_INTERNAL_SERVER,
-            message: e.to_string(),
-        });
-    }
-
-    let file_path = StdPath::new(&dir_path).join(format!("{}.md", slug));
-    let front_matter =
-        serde_yaml::to_string(&metadata).map_err(|e| AppError::InternalServerError {
-            code: ERR_INTERNAL_SERVER,
-            message: e.to_string(),
-        })?;
-    let content = format!("---\n{}---\n\n{}", front_matter, payload.content);
-    fs::write(&file_path, content).map_err(|e| AppError::InternalServerError {
-        code: ERR_INTERNAL_SERVER,
-        message: e.to_string(),
-    })?;
+    write_article_to_file(&metadata, &payload.content, &file_path)?;
 
     let last_modified = fs::metadata(&file_path)
         .and_then(|m| m.modified())
@@ -321,30 +330,15 @@ async fn update_article(
             .or(existing_article.metadata.category.clone()),
     };
 
-    let dir_path = if let Some(ref cat) = metadata.category {
-        format!("{}/{}", ARTICLE_DIR, cat)
+    let file_path = if let Some(ref cat) = metadata.category {
+        StdPath::new(ARTICLE_DIR)
+            .join(cat)
+            .join(format!("{}.md", slug))
     } else {
-        ARTICLE_DIR.to_string()
+        StdPath::new(ARTICLE_DIR).join(format!("{}.md", slug))
     };
 
-    if let Err(e) = fs::create_dir_all(&dir_path) {
-        return Err(AppError::InternalServerError {
-            code: ERR_INTERNAL_SERVER,
-            message: e.to_string(),
-        });
-    }
-
-    let file_path = StdPath::new(&dir_path).join(format!("{}.md", slug));
-    let front_matter =
-        serde_yaml::to_string(&metadata).map_err(|e| AppError::InternalServerError {
-            code: ERR_INTERNAL_SERVER,
-            message: e.to_string(),
-        })?;
-    let content = format!("---\n{}---\n\n{}", front_matter, payload.content);
-    fs::write(&file_path, content).map_err(|e| AppError::InternalServerError {
-        code: ERR_INTERNAL_SERVER,
-        message: e.to_string(),
-    })?;
+    write_article_to_file(&metadata, &payload.content, &file_path)?;
 
     let last_modified = fs::metadata(&file_path)
         .and_then(|m| m.modified())
