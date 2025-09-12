@@ -106,8 +106,8 @@ where
             let bytes = match to_bytes(body, MAX_CACHED_RESPONSE_SIZE).await {
                 Ok(b) => b,
                 Err(_) => {
-                    // If the body is too large or an error occurs, return the original parts
-                    // without caching anything.
+                    // If the body is too large or an error occurs, skip caching and
+                    // return the original response headers with an empty body.
                     return Ok(Response::from_parts(parts, Body::empty()));
                 }
             };
