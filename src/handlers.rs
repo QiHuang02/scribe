@@ -7,3 +7,4 @@ pub mod error;
 pub mod search;
 pub mod sitemap;
 pub mod tags;
+pub mod root;
