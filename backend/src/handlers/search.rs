@@ -74,6 +74,7 @@ async fn search_articles(
             tracing::error!("Search error: {:?}", e);
 
             let query_lower = params.q.to_lowercase();
+            let content_limit = state.config.content_search_limit;
 
             let articles_results: Vec<SearchResult> = {
                 let store = state.store.read().await;
@@ -81,8 +82,8 @@ async fn search_articles(
                     let content = store
                         .load_content_for(article)
                         .unwrap_or_else(|_| String::new());
-                    let content_to_search = if content.len() > 10_000 {
-                        &content[..10_000]
+                    let content_to_search = if content.len() > content_limit {
+                        &content[..content_limit]
                     } else {
                         &content
                     };
@@ -115,8 +116,8 @@ async fn search_articles(
                     let content = store
                         .load_content_for(note)
                         .unwrap_or_else(|_| String::new());
-                    let content_to_search = if content.len() > 10_000 {
-                        &content[..10_000]
+                    let content_to_search = if content.len() > content_limit {
+                        &content[..content_limit]
                     } else {
                         &content
                     };
