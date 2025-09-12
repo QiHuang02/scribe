@@ -1,5 +1,5 @@
 use crate::config::get_admin_token_hash;
-use crate::handlers::error::{AppError, ERR_UNAUTHORIZED};
+use crate::handlers::error::{AppError, ERR_FORBIDDEN, ERR_UNAUTHORIZED};
 use axum::body::Body;
 use axum::http::{Request, header::AUTHORIZATION};
 use axum::middleware::Next;
@@ -13,17 +13,25 @@ pub async fn require_admin(req: Request<Body>, next: Next) -> Result<Response, A
         .get(AUTHORIZATION)
         .and_then(|h| h.to_str().ok());
 
-    let stored_hash = get_admin_token_hash().expect("ADMIN_TOKEN_HASH must be set");
-
-    if let Some(token) = auth_header {
-        let provided_hash: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-        if provided_hash.ct_eq(&stored_hash).unwrap_u8() == 1 {
-            return Ok(next.run(req).await);
+    let token = match auth_header {
+        Some(t) => t,
+        None => {
+            return Err(AppError::Unauthorized {
+                code: ERR_UNAUTHORIZED,
+                message: "Missing authorization token".to_string(),
+            });
         }
-    }
+    };
 
-    Err(AppError::Unauthorized {
-        code: ERR_UNAUTHORIZED,
-        message: "Invalid admin token".to_string(),
-    })
+    let stored_hash = get_admin_token_hash().expect("ADMIN_TOKEN_HASH must be set");
+    let provided_hash: [u8; 32] = Sha256::digest(token.as_bytes()).into();
+
+    if provided_hash.ct_eq(&stored_hash).unwrap_u8() == 1 {
+        Ok(next.run(req).await)
+    } else {
+        Err(AppError::Forbidden {
+            code: ERR_FORBIDDEN,
+            message: "Invalid admin token".to_string(),
+        })
+    }
 }
