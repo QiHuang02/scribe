@@ -57,7 +57,7 @@
       </el-form-item>
 
       <el-form-item>
-        <el-button type="primary" @click="submit">提交</el-button>
+        <el-button type="primary" @click="submit">发布</el-button>
       </el-form-item>
     </el-form>
   </el-card>
@@ -105,19 +105,21 @@ onMounted(async () => {
 
 async function submit() {
   try {
+    const token = localStorage.getItem('token')
     const res = await fetch('/api/articles', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
       body: JSON.stringify(form.value)
     })
     if (!res.ok) {
       throw new Error(await res.text())
     }
-    ElMessage.success('提交成功')
+    ElMessage.success('发布成功')
   } catch (e) {
-    ElMessage.error(e.message || '提交失败')
+    ElMessage.error(e.message || '发布失败')
   }
 }
 </script>
