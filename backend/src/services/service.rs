@@ -481,15 +481,14 @@ impl ArticleStore {
             .and_then(|&idx| self.articles.get(idx))
     }
 
-    pub fn query<F>(&self, filter: F) -> Vec<&Article>
+    pub fn query<'a, F>(&'a self, filter: F) -> impl Iterator<Item = &'a Article>
     where
-        F: Fn(&Article) -> bool,
+        F: Fn(&Article) -> bool + 'a,
     {
         self.articles
             .iter()
             .filter(|a| !a.deleted)
-            .filter(|a| filter(a))
-            .collect()
+            .filter(move |a| filter(a))
     }
 
     pub fn load_content_for(&self, article: &Article) -> Result<String, LoadError> {

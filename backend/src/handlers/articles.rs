@@ -107,7 +107,7 @@ async fn filter_articles<'a>(
     params: &ArticleParams,
     state: &AppState,
 ) -> Vec<&'a Article> {
-    let mut articles = store.query(|article| !article.metadata.draft);
+    let mut articles: Vec<&Article> = store.query(|article| !article.metadata.draft).collect();
     if let Some(tag) = &params.tag {
         articles.retain(|a| a.metadata.tags.contains(tag));
     }
