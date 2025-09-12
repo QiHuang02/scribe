@@ -73,39 +73,79 @@ async fn search_articles(
         Err(e) => {
             tracing::error!("Search error: {:?}", e);
 
-            let store = state.store.read().await;
             let query_lower = params.q.to_lowercase();
-            let articles = store.query(|article| {
-                let content = store
-                    .load_content_for(article)
-                    .unwrap_or_else(|_| String::new());
-                let content_to_search = if content.len() > 10_000 {
-                    &content[..10_000]
-                } else {
-                    &content
-                };
 
-                !article.metadata.draft
-                    && (article.metadata.title.to_lowercase().contains(&query_lower)
-                        || article
-                            .metadata
-                            .description
-                            .to_lowercase()
-                            .contains(&query_lower)
-                        || content_to_search.to_lowercase().contains(&query_lower))
-            });
+            let articles_results: Vec<SearchResult> = {
+                let store = state.store.read().await;
+                let articles = store.query(|article| {
+                    let content = store
+                        .load_content_for(article)
+                        .unwrap_or_else(|_| String::new());
+                    let content_to_search = if content.len() > 10_000 {
+                        &content[..10_000]
+                    } else {
+                        &content
+                    };
 
-            let fallback_results: Vec<SearchResult> = articles
-                .into_iter()
-                .take(limit)
-                .map(|article| SearchResult {
-                    slug: article.slug.clone(),
-                    title: article.metadata.title.clone(),
-                    description: article.metadata.description.clone(),
-                    score: 1.0, // 默认评分
-                    highlights: None,
-                })
-                .collect();
+                    !article.metadata.draft
+                        && (article.metadata.title.to_lowercase().contains(&query_lower)
+                            || article
+                                .metadata
+                                .description
+                                .to_lowercase()
+                                .contains(&query_lower)
+                            || content_to_search.to_lowercase().contains(&query_lower))
+                });
+
+                articles
+                    .into_iter()
+                    .map(|article| SearchResult {
+                        slug: article.slug.clone(),
+                        title: article.metadata.title.clone(),
+                        description: article.metadata.description.clone(),
+                        score: 1.0,
+                        highlights: None,
+                    })
+                    .collect()
+            };
+
+            let notes_results: Vec<SearchResult> = {
+                let store = state.note_store.read().await;
+                let notes = store.query(|note| {
+                    let content = store
+                        .load_content_for(note)
+                        .unwrap_or_else(|_| String::new());
+                    let content_to_search = if content.len() > 10_000 {
+                        &content[..10_000]
+                    } else {
+                        &content
+                    };
+
+                    !note.metadata.draft
+                        && (note.metadata.title.to_lowercase().contains(&query_lower)
+                            || note
+                                .metadata
+                                .description
+                                .to_lowercase()
+                                .contains(&query_lower)
+                            || content_to_search.to_lowercase().contains(&query_lower))
+                });
+
+                notes
+                    .into_iter()
+                    .map(|note| SearchResult {
+                        slug: format!("notes/{}", note.slug),
+                        title: note.metadata.title.clone(),
+                        description: note.metadata.description.clone(),
+                        score: 1.0,
+                        highlights: None,
+                    })
+                    .collect()
+            };
+
+            let mut combined = articles_results;
+            combined.extend(notes_results);
+            let fallback_results: Vec<SearchResult> = combined.into_iter().take(limit).collect();
 
             let response = SearchResponse {
                 total_found: fallback_results.len(),
