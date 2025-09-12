@@ -1,7 +1,7 @@
 <template>
   <div class="article">
     <h1 v-if="article">{{ article.metadata.title }}</h1>
-    <pre v-if="article">{{ article.content }}</pre>
+    <div v-if="article" v-html="sanitizedHtml"></div>
     <div v-if="versions.length">
       <h2>Versions</h2>
       <ul>
@@ -18,14 +18,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const route = useRoute()
 const article = ref(null)
 const versions = ref([])
 const error = ref('')
 const isAuthorized = localStorage.getItem('isAdmin') === 'true'
+
+const sanitizedHtml = computed(() => {
+  if (!article.value) return ''
+  return DOMPurify.sanitize(marked.parse(article.value.content || ''))
+})
 
 async function load() {
   try {
