@@ -68,6 +68,7 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import { getToken } from '../utils/storage'
 
 const form = ref({
   title: '',
@@ -116,7 +117,7 @@ async function submit() {
     return
   }
   try {
-    const token = localStorage.getItem('token')
+    const token = getToken()
     const res = await fetch('/api/articles', {
       method: 'POST',
       headers: {

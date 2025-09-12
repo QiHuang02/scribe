@@ -24,12 +24,13 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import { getToken, isAdmin } from '../utils/storage'
 
 const route = useRoute()
 const article = ref(null)
 const versions = ref([])
 const error = ref('')
-const isAuthorized = localStorage.getItem('isAdmin') === 'true'
+const isAuthorized = isAdmin()
 
 const md = new MarkdownIt()
 
@@ -60,7 +61,13 @@ async function loadVersions() {
 
 async function restore(version) {
   try {
-    await fetch(`/api/articles/${route.params.slug}/versions/${version}/restore`, { method: 'POST' })
+    const token = getToken()
+    await fetch(`/api/articles/${route.params.slug}/versions/${version}/restore`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    })
     await load()
     await loadVersions()
   } catch (e) {
