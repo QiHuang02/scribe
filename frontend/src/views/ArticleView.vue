@@ -1,17 +1,19 @@
 <template>
   <div class="article">
-    <h1 v-if="article">{{ article.metadata.title }}</h1>
-    <div v-if="article" v-html="sanitizedHtml"></div>
-    <div v-if="versions.length">
-      <h2>Versions</h2>
-      <ul>
-        <li v-for="v in versions" :key="v.version">
-          {{ new Date(v.timestamp).toLocaleString() }}
-          <router-link :to="`/articles/${route.params.slug}/versions/${v.version}`">Preview</router-link>
-          <button v-if="isAuthorized" @click="restore(v.version)">Restore</button>
-        </li>
-      </ul>
-    </div>
+    <template v-if="article">
+      <h1>{{ article.metadata.title }}</h1>
+      <div v-html="sanitizedHtml"></div>
+      <div v-if="versions.length">
+        <h2>Versions</h2>
+        <ul>
+          <li v-for="v in versions" :key="v.version">
+            {{ new Date(v.timestamp).toLocaleString() }}
+            <router-link :to="`/articles/${route.params.slug}/versions/${v.version}`">Preview</router-link>
+            <button v-if="isAuthorized" @click="restore(v.version)">Restore</button>
+          </li>
+        </ul>
+      </div>
+    </template>
     <p v-else-if="error">{{ error }}</p>
     <p v-else>Loading...</p>
   </div>
