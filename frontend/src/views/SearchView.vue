@@ -3,14 +3,14 @@
     <input
       v-model="query"
       @keyup.enter="performSearch"
-      placeholder="Search articles"
+      placeholder="Search articles and notes"
     />
     <button @click="performSearch">Search</button>
 
     <div v-if="results.length">
       <ul>
         <li v-for="r in results" :key="r.slug">
-          <router-link :to="`/articles/${r.slug}`">{{ r.title }}</router-link>
+          <router-link :to="r.slug.startsWith('notes/') ? `/${r.slug}` : `/articles/${r.slug}`">{{ r.title }}</router-link>
         </li>
       </ul>
     </div>
