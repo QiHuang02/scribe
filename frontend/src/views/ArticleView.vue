@@ -22,7 +22,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { marked } from 'marked'
+import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 
 const route = useRoute()
@@ -31,9 +31,11 @@ const versions = ref([])
 const error = ref('')
 const isAuthorized = localStorage.getItem('isAdmin') === 'true'
 
+const md = new MarkdownIt()
+
 const sanitizedHtml = computed(() => {
   if (!article.value) return ''
-  return DOMPurify.sanitize(marked.parse(article.value.content || ''))
+  return DOMPurify.sanitize(md.render(article.value.content || ''))
 })
 
 async function load() {

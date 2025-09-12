@@ -10,7 +10,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { marked } from 'marked'
+import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 
 const route = useRoute()
@@ -19,9 +19,11 @@ const version = route.params.version
 const versionData = ref(null)
 const error = ref('')
 
+const md = new MarkdownIt()
+
 const sanitizedHtml = computed(() => {
   if (!versionData.value) return ''
-  return DOMPurify.sanitize(marked.parse(versionData.value.content || ''))
+  return DOMPurify.sanitize(md.render(versionData.value.content || ''))
 })
 
 async function load() {
