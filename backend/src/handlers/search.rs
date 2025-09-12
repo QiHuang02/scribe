@@ -74,30 +74,27 @@ async fn search_articles(
             tracing::error!("Search error: {:?}", e);
 
             let query_lower = params.q.to_lowercase();
-            let content_limit = state.config.content_search_limit;
 
             let articles_results: Vec<SearchResult> = {
                 let store = state.store.read().await;
                 store
-                    .query(|article| {
-                        let content = store
-                            .load_content_for(article)
-                            .unwrap_or_else(|_| String::new());
-                        let content_to_search = if content.len() > content_limit {
-                            &content[..content_limit]
-                        } else {
-                            &content
-                        };
-
-                        !article.metadata.draft
-                            && (article.metadata.title.to_lowercase().contains(&query_lower)
-                                || article
+                    .query(
+                        |article| {
+                            !article.metadata.draft
+                                && (article
                                     .metadata
-                                    .description
+                                    .title
                                     .to_lowercase()
                                     .contains(&query_lower)
-                                || content_to_search.to_lowercase().contains(&query_lower))
-                    })
+                                    || article
+                                        .metadata
+                                        .description
+                                        .to_lowercase()
+                                        .contains(&query_lower))
+                        },
+                        0,
+                        usize::MAX,
+                    )
                     .map(|article| SearchResult {
                         slug: article.slug_with_category(),
                         title: article.metadata.title.clone(),
@@ -111,25 +108,23 @@ async fn search_articles(
             let notes_results: Vec<SearchResult> = {
                 let store = state.note_store.read().await;
                 store
-                    .query(|note| {
-                        let content = store
-                            .load_content_for(note)
-                            .unwrap_or_else(|_| String::new());
-                        let content_to_search = if content.len() > content_limit {
-                            &content[..content_limit]
-                        } else {
-                            &content
-                        };
-
-                        !note.metadata.draft
-                            && (note.metadata.title.to_lowercase().contains(&query_lower)
-                                || note
+                    .query(
+                        |note| {
+                            !note.metadata.draft
+                                && (note
                                     .metadata
-                                    .description
+                                    .title
                                     .to_lowercase()
                                     .contains(&query_lower)
-                                || content_to_search.to_lowercase().contains(&query_lower))
-                    })
+                                    || note
+                                        .metadata
+                                        .description
+                                        .to_lowercase()
+                                        .contains(&query_lower))
+                        },
+                        0,
+                        usize::MAX,
+                    )
                     .map(|note| {
                         let slug = note.slug_with_category();
                         SearchResult {

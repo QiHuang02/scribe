@@ -177,7 +177,9 @@ async fn watch_articles(state: Arc<AppState>) {
         let mut removed_map = HashMap::new();
         for change in &changes {
             if matches!(change.change_type, FileChange::Removed) {
-                if let Some(article) = store_guard.query(|a| a.file_path == change.path).next() {
+                if let Some(article) =
+                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX).next()
+                {
                     removed_map.insert(change.path.clone(), article.slug.clone());
                 }
             }
@@ -190,7 +192,7 @@ async fn watch_articles(state: Arc<AppState>) {
                         match change.change_type {
                             FileChange::Added | FileChange::Modified => {
                                 if let Some(article) =
-                                    store_guard.query(|a| a.file_path == change.path).next()
+                                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX).next()
                                 {
                                     match store_guard.load_content_for(article) {
                                         Ok(content) => {
@@ -314,7 +316,9 @@ async fn watch_notes(state: Arc<AppState>) {
         let mut removed_map = HashMap::new();
         for change in &changes {
             if matches!(change.change_type, FileChange::Removed) {
-                if let Some(article) = store_guard.query(|a| a.file_path == change.path).next() {
+                if let Some(article) =
+                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX).next()
+                {
                     removed_map.insert(
                         change.path.clone(),
                         format!("notes/{}", article.slug_with_category()),
@@ -330,7 +334,8 @@ async fn watch_notes(state: Arc<AppState>) {
                         match change.change_type {
                             FileChange::Added | FileChange::Modified => {
                                 if let Some(article) =
-                                    store_guard.query(|a| a.file_path == change.path).next()
+                                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX)
+                                        .next()
                                 {
                                     match store_guard.load_content_for(article) {
                                         Ok(content) => {

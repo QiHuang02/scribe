@@ -481,7 +481,12 @@ impl ArticleStore {
             .and_then(|&idx| self.articles.get(idx))
     }
 
-    pub fn query<'a, F>(&'a self, filter: F) -> impl Iterator<Item = &'a Article>
+    pub fn query<'a, F>(
+        &'a self,
+        filter: F,
+        offset: usize,
+        limit: usize,
+    ) -> impl Iterator<Item = &'a Article>
     where
         F: Fn(&Article) -> bool + 'a,
     {
@@ -489,6 +494,8 @@ impl ArticleStore {
             .iter()
             .filter(|a| !a.deleted)
             .filter(move |a| filter(a))
+            .skip(offset)
+            .take(limit)
     }
 
     pub fn load_content_for(&self, article: &Article) -> Result<String, LoadError> {

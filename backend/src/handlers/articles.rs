@@ -106,53 +106,91 @@ async fn filter_articles<'a>(
     store: &'a ArticleStore,
     params: &ArticleParams,
     state: &AppState,
-) -> Vec<&'a Article> {
-    let mut articles: Vec<&Article> = store.query(|article| !article.metadata.draft).collect();
-    if let Some(tag) = &params.tag {
-        articles.retain(|a| a.metadata.tags.contains(tag));
-    }
-    if let Some(category) = &params.category {
-        articles.retain(|a| a.metadata.category.as_ref() == Some(category));
-    }
-    if let Some(query) = &params.q {
+    offset: usize,
+    limit: usize,
+) -> (Vec<&'a Article>, usize) {
+    let tag = params.tag.clone();
+    let category = params.category.clone();
+    let query = params.q.clone();
+
+    let search_slugs = if let Some(ref q) = query {
         if let Some(ref search_service) = state.search_service {
-            match search_service.search(query, 1000, false).await {
-                Ok(search_results) => {
-                    let search_slugs: std::collections::HashSet<String> =
-                        search_results.into_iter().map(|r| r.slug).collect();
-                    articles.retain(|a| search_slugs.contains(&a.slug));
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "Full-text search failed, falling back to simple search: {:?}",
-                        e
-                    );
-                    let query_lower = query.to_lowercase();
-                    articles.retain(|a| {
-                        let content = store.load_content_for(a).unwrap_or_else(|_| String::new());
-                        a.metadata.title.to_lowercase().contains(&query_lower)
-                            || a.metadata.description.to_lowercase().contains(&query_lower)
-                            || content.to_lowercase().contains(&query_lower)
-                    });
-                }
+            match search_service.search(q, 1000, false).await {
+                Ok(search_results) => Some(
+                    search_results
+                        .into_iter()
+                        .map(|r| r.slug)
+                        .collect::<std::collections::HashSet<_>>(),
+                ),
+                Err(_) => None,
             }
         } else {
-            let query_lower = query.to_lowercase();
-            articles.retain(|a| {
-                let content = store.load_content_for(a).unwrap_or_else(|_| String::new());
-                let content_to_search = if content.len() > state.config.content_search_limit {
-                    &content[..state.config.content_search_limit]
-                } else {
-                    &content
-                };
-
-                a.metadata.title.to_lowercase().contains(&query_lower)
-                    || a.metadata.description.to_lowercase().contains(&query_lower)
-                    || content_to_search.to_lowercase().contains(&query_lower)
-            });
+            None
         }
-    }
-    articles
+    } else {
+        None
+    };
+
+    let tag1 = tag.clone();
+    let category1 = category.clone();
+    let query_lower = query.clone().map(|q| q.to_lowercase());
+    let search_slugs1 = search_slugs.clone();
+    let filter = move |a: &Article| {
+        if a.metadata.draft {
+            return false;
+        }
+        if let Some(ref t) = tag1 {
+            if !a.metadata.tags.contains(t) {
+                return false;
+            }
+        }
+        if let Some(ref c) = category1 {
+            if a.metadata.category.as_ref() != Some(c) {
+                return false;
+            }
+        }
+        if let Some(ref slugs) = search_slugs1 {
+            slugs.contains(&a.slug)
+        } else if let Some(ref ql) = query_lower {
+            a.metadata.title.to_lowercase().contains(ql)
+                || a.metadata.description.to_lowercase().contains(ql)
+        } else {
+            true
+        }
+    };
+
+    let articles: Vec<&Article> = store.query(filter, offset, limit).collect();
+
+    let tag2 = tag;
+    let category2 = category;
+    let query_lower2 = query.map(|q| q.to_lowercase());
+    let search_slugs2 = search_slugs;
+    let filter_total = move |a: &Article| {
+        if a.metadata.draft {
+            return false;
+        }
+        if let Some(ref t) = tag2 {
+            if !a.metadata.tags.contains(t) {
+                return false;
+            }
+        }
+        if let Some(ref c) = category2 {
+            if a.metadata.category.as_ref() != Some(c) {
+                return false;
+            }
+        }
+        if let Some(ref slugs) = search_slugs2 {
+            slugs.contains(&a.slug)
+        } else if let Some(ref ql) = query_lower2 {
+            a.metadata.title.to_lowercase().contains(ql)
+                || a.metadata.description.to_lowercase().contains(ql)
+        } else {
+            true
+        }
+    };
+    let total = store.query(filter_total, 0, usize::MAX).count();
+
+    (articles, total)
 }
 
 async fn get_articles_list(
@@ -160,15 +198,13 @@ async fn get_articles_list(
     Query(params): Query<ArticleParams>,
 ) -> Result<impl IntoResponse, AppError> {
     let store = state.store.read().await;
-    let all_matching_articles = filter_articles(&store, &params, &state).await;
-
-    let total_articles = all_matching_articles.len();
     let limit = if params.limit > 0 { params.limit } else { 10 };
-    let total_pages = (total_articles as f64 / limit as f64).ceil() as usize;
     let page = if params.page > 0 { params.page } else { 1 };
-    let skip = (page - 1) * limit;
-
-    let paginated_articles = all_matching_articles.into_iter().skip(skip).take(limit);
+    let offset = (page - 1) * limit;
+    let (paginated_articles_vec, total_articles) =
+        filter_articles(&store, &params, &state, offset, limit).await;
+    let total_pages = (total_articles as f64 / limit as f64).ceil() as usize;
+    let paginated_articles = paginated_articles_vec.into_iter();
 
     let result = if params.include_content.unwrap_or(false) {
         let articles_with_content = paginated_articles

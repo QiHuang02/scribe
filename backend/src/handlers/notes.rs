@@ -41,34 +41,69 @@ async fn get_notes_list(
     Query(params): Query<NoteParams>,
 ) -> Result<impl IntoResponse, AppError> {
     let store = state.note_store.read().await;
+    let limit = if params.limit > 0 { params.limit } else { 10 };
+    let page = if params.page > 0 { params.page } else { 1 };
+    let offset = (page - 1) * limit;
 
-    let all_matching = {
-        let mut notes: Vec<&Article> = store.query(|note| !note.metadata.draft).collect();
-        if let Some(tag) = &params.tag {
-            notes.retain(|a| a.metadata.tags.contains(tag));
+    let tag = params.tag.clone();
+    let category = params.category.clone();
+    let query_lower = params.q.clone().map(|q| q.to_lowercase());
+
+    let tag1 = tag.clone();
+    let category1 = category.clone();
+    let query1 = query_lower.clone();
+    let filter = move |a: &Article| {
+        if a.metadata.draft {
+            return false;
         }
-        if let Some(category) = &params.category {
-            notes.retain(|a| a.metadata.category.as_ref() == Some(category));
+        if let Some(ref t) = tag1 {
+            if !a.metadata.tags.contains(t) {
+                return false;
+            }
         }
-        if let Some(query) = &params.q {
-            let query_lower = query.to_lowercase();
-            notes.retain(|a| {
-                let content = store.load_content_for(a).unwrap_or_else(|_| String::new());
-                a.metadata.title.to_lowercase().contains(&query_lower)
-                    || a.metadata.description.to_lowercase().contains(&query_lower)
-                    || content.to_lowercase().contains(&query_lower)
-            });
+        if let Some(ref c) = category1 {
+            if a.metadata.category.as_ref() != Some(c) {
+                return false;
+            }
         }
-        notes
+        if let Some(ref ql) = query1 {
+            a.metadata.title.to_lowercase().contains(ql)
+                || a.metadata.description.to_lowercase().contains(ql)
+        } else {
+            true
+        }
     };
 
-    let total_notes = all_matching.len();
-    let limit = if params.limit > 0 { params.limit } else { 10 };
-    let total_pages = (total_notes as f64 / limit as f64).ceil() as usize;
-    let page = if params.page > 0 { params.page } else { 1 };
-    let skip = (page - 1) * limit;
+    let paginated_vec: Vec<&Article> = store.query(filter, offset, limit).collect();
 
-    let paginated = all_matching.into_iter().skip(skip).take(limit);
+    let tag2 = tag;
+    let category2 = category;
+    let query2 = query_lower;
+    let filter_total = move |a: &Article| {
+        if a.metadata.draft {
+            return false;
+        }
+        if let Some(ref t) = tag2 {
+            if !a.metadata.tags.contains(t) {
+                return false;
+            }
+        }
+        if let Some(ref c) = category2 {
+            if a.metadata.category.as_ref() != Some(c) {
+                return false;
+            }
+        }
+        if let Some(ref ql) = query2 {
+            a.metadata.title.to_lowercase().contains(ql)
+                || a.metadata.description.to_lowercase().contains(ql)
+        } else {
+            true
+        }
+    };
+    let total_notes = store.query(filter_total, 0, usize::MAX).count();
+    let total_pages = (total_notes as f64 / limit as f64).ceil() as usize;
+
+    let paginated = paginated_vec.into_iter();
 
     let result = if params.include_content.unwrap_or(false) {
         let notes_with_content = paginated
@@ -119,7 +154,11 @@ async fn get_note_by_slug(
     };
 
     let note = store
-        .query(|n| n.slug == slug && n.metadata.category.as_deref() == category.as_deref())
+        .query(
+            |n| n.slug == slug && n.metadata.category.as_deref() == category.as_deref(),
+            0,
+            usize::MAX,
+        )
         .next();
 
     match note {
