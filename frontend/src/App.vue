@@ -1,6 +1,7 @@
 <template>
   <nav>
     <router-link to="/">Articles</router-link> |
+    <router-link to="/categories">Categories</router-link> |
     <router-link to="/about">About</router-link>
   </nav>
   <router-view/>
