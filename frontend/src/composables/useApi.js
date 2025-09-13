@@ -5,7 +5,20 @@ export default function useApi(initialValue = null, { retries = 3, retryDelay = 
   const error = ref('')
   const loading = ref(false)
 
-  const request = async (url, options, config = {}) => {
+  let controller
+
+  const cancel = () => {
+    if (controller) {
+      controller.abort()
+      controller = null
+    }
+  }
+
+  const request = async (url, options = {}, config = {}) => {
+    cancel()
+    controller = new AbortController()
+    const currentController = controller
+
     loading.value = true
     error.value = ''
 
@@ -17,7 +30,7 @@ export default function useApi(initialValue = null, { retries = 3, retryDelay = 
 
     while (attempt < maxRetries) {
       try {
-        const res = await fetch(url, options)
+        const res = await fetch(url, { ...options, signal: controller.signal })
         if (!res.ok) {
           let message = 'Request failed'
           try {
@@ -32,6 +45,13 @@ export default function useApi(initialValue = null, { retries = 3, retryDelay = 
         loading.value = false
         return
       } catch (e) {
+        if (currentController !== controller) {
+          return
+        }
+        if (e.name === 'AbortError' || (typeof DOMException !== 'undefined' && e instanceof DOMException)) {
+          loading.value = false
+          return
+        }
         lastError = e
         attempt++
         if (attempt < maxRetries) {
@@ -45,5 +65,5 @@ export default function useApi(initialValue = null, { retries = 3, retryDelay = 
     loading.value = false
   }
 
-  return { data, error, loading, request }
+  return { data, error, loading, request, cancel }
 }
