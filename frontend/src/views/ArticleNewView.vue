@@ -67,8 +67,10 @@
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
-import { getToken } from '../utils/storage'
 import { md } from '../utils/markdown'
+import { useMainStore } from '../store'
+
+const store = useMainStore()
 
 const form = ref({
   title: '',
@@ -131,7 +133,7 @@ async function submit() {
     return
   }
   try {
-    const token = getToken()
+    const token = store.token
     const res = await fetch('/api/articles', {
       method: 'POST',
       headers: {

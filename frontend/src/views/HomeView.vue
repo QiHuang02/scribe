@@ -1,7 +1,7 @@
 <template>
   <div class="home">
-    <ul v-if="articles.length">
-      <li v-for="a in articles" :key="a.slug">
+    <ul v-if="store.articles.length">
+      <li v-for="a in store.articles" :key="a.slug">
         <router-link :to="`/articles/${a.slug}`">{{ a.metadata.title }}</router-link>
       </li>
     </ul>
@@ -13,25 +13,21 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useMainStore } from '../store'
 
-const articles = ref([])
+const store = useMainStore()
 const error = ref('')
 const route = useRoute()
 
 const fetchArticles = async () => {
   try {
-    const params = new URLSearchParams()
-    if (route.query.tag) params.set('tag', route.query.tag)
-    if (route.query.category) params.set('category', route.query.category)
-    const query = params.toString()
-    const res = await fetch(`/api/articles${query ? `?${query}` : ''}`)
-    if (!res.ok) throw new Error('Request failed')
-    const data = await res.json()
-    articles.value = data.articles || []
+    const params = {}
+    if (route.query.tag) params.tag = route.query.tag
+    if (route.query.category) params.category = route.query.category
+    await store.fetchArticles(params)
     error.value = ''
   } catch (e) {
     error.value = 'Failed to load'
-    articles.value = []
   }
 }
 

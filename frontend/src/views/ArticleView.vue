@@ -1,7 +1,7 @@
 <template>
   <div class="article">
-    <template v-if="article">
-      <h1>{{ article.metadata.title }}</h1>
+    <template v-if="store.currentArticle">
+      <h1>{{ store.currentArticle.metadata.title }}</h1>
       <div v-html="sanitizedHtml"></div>
       <div v-if="versions.length">
         <h2>Versions</h2>
@@ -23,25 +23,23 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import DOMPurify from 'dompurify'
-import { getToken, isAdmin } from '../utils/storage'
 import { md } from '../utils/markdown'
+import { useMainStore } from '../store'
 
 const route = useRoute()
-const article = ref(null)
+const store = useMainStore()
 const versions = ref([])
 const error = ref('')
-const isAuthorized = isAdmin()
+const isAuthorized = computed(() => store.user?.isAdmin)
 
 const sanitizedHtml = computed(() => {
-  if (!article.value) return ''
-  return DOMPurify.sanitize(md.render(article.value.content || ''))
+  if (!store.currentArticle) return ''
+  return DOMPurify.sanitize(md.render(store.currentArticle.content || ''))
 })
 
 async function load() {
   try {
-    const res = await fetch(`/api/articles/${route.params.slug}`)
-    if (!res.ok) throw new Error('Request failed')
-    article.value = await res.json()
+    await store.fetchArticle(route.params.slug)
   } catch (e) {
     error.value = 'Failed to load'
   }
@@ -59,7 +57,7 @@ async function loadVersions() {
 
 async function restore(version) {
   try {
-    const token = getToken()
+    const token = store.token
     await fetch(`/api/articles/${route.params.slug}/versions/${version}/restore`, {
       method: 'POST',
       headers: {
