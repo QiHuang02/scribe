@@ -103,6 +103,39 @@ pub fn create_router() -> Router<Arc<AppState>> {
         )
 }
 
+fn matches_filters(
+    article: &Article,
+    tag: &Option<String>,
+    category: &Option<String>,
+    search_slugs: &Option<std::collections::HashSet<String>>,
+    query_lower: &Option<String>,
+) -> bool {
+    if article.metadata.draft {
+        return false;
+    }
+
+    if let Some(t) = tag {
+        if !article.metadata.tags.contains(t) {
+            return false;
+        }
+    }
+
+    if let Some(c) = category {
+        if article.metadata.category.as_ref() != Some(c) {
+            return false;
+        }
+    }
+
+    if let Some(slugs) = search_slugs.as_ref() {
+        slugs.contains(&article.slug)
+    } else if let Some(ql) = query_lower.as_ref() {
+        article.metadata.title.to_lowercase().contains(ql)
+            || article.metadata.description.to_lowercase().contains(ql)
+    } else {
+        true
+    }
+}
+
 async fn filter_articles<'a>(
     store: &'a ArticleStore,
     params: &ArticleParams,
@@ -132,64 +165,36 @@ async fn filter_articles<'a>(
         None
     };
 
-    let tag1 = tag.clone();
-    let category1 = category.clone();
-    let query_lower = query.clone().map(|q| q.to_lowercase());
-    let search_slugs1 = search_slugs.clone();
-    let filter = move |a: &Article| {
-        if a.metadata.draft {
-            return false;
-        }
-        if let Some(ref t) = tag1 {
-            if !a.metadata.tags.contains(t) {
-                return false;
-            }
-        }
-        if let Some(ref c) = category1 {
-            if a.metadata.category.as_ref() != Some(c) {
-                return false;
-            }
-        }
-        if let Some(ref slugs) = search_slugs1 {
-            slugs.contains(&a.slug)
-        } else if let Some(ref ql) = query_lower {
-            a.metadata.title.to_lowercase().contains(ql)
-                || a.metadata.description.to_lowercase().contains(ql)
-        } else {
-            true
-        }
-    };
+    let query_lower = query.map(|q| q.to_lowercase());
 
-    let articles: Vec<&Article> = store.query(filter, offset, limit).collect();
+    let tag_filter = tag.clone();
+    let category_filter = category.clone();
+    let search_slugs_filter = search_slugs.clone();
+    let query_lower_filter = query_lower.clone();
 
-    let tag2 = tag;
-    let category2 = category;
-    let query_lower2 = query.map(|q| q.to_lowercase());
-    let search_slugs2 = search_slugs;
-    let filter_total = move |a: &Article| {
-        if a.metadata.draft {
-            return false;
-        }
-        if let Some(ref t) = tag2 {
-            if !a.metadata.tags.contains(t) {
-                return false;
-            }
-        }
-        if let Some(ref c) = category2 {
-            if a.metadata.category.as_ref() != Some(c) {
-                return false;
-            }
-        }
-        if let Some(ref slugs) = search_slugs2 {
-            slugs.contains(&a.slug)
-        } else if let Some(ref ql) = query_lower2 {
-            a.metadata.title.to_lowercase().contains(ql)
-                || a.metadata.description.to_lowercase().contains(ql)
-        } else {
-            true
-        }
-    };
-    let total = store.query(filter_total, 0, usize::MAX).count();
+    let articles: Vec<&Article> = store
+        .query(
+            move |a| {
+                matches_filters(
+                    a,
+                    &tag_filter,
+                    &category_filter,
+                    &search_slugs_filter,
+                    &query_lower_filter,
+                )
+            },
+            offset,
+            limit,
+        )
+        .collect();
+
+    let total = store
+        .query(
+            move |a| matches_filters(a, &tag, &category, &search_slugs, &query_lower),
+            0,
+            usize::MAX,
+        )
+        .count();
 
     (articles, total)
 }
@@ -484,6 +489,9 @@ mod tests {
     use super::*;
     use crate::config::ENABLE_NESTED_CATEGORIES;
     use tempfile::tempdir;
+    use std::collections::HashSet;
+    use std::time::SystemTime;
+    use chrono::Utc;
 
     async fn setup_store() -> (
         tempfile::TempDir,
@@ -553,5 +561,67 @@ mod tests {
             resp.0,
             json!({"slug": "slug", "message": "Article created"})
         );
+    }
+
+    #[test]
+    fn test_matches_filters_helper() {
+        let metadata = Metadata {
+            title: "Rust Article".to_string(),
+            author: "Author".to_string(),
+            date: Utc::now(),
+            tags: vec!["rust".to_string()],
+            description: "An article about Rust".to_string(),
+            draft: false,
+            last_updated: None,
+            category: Some("programming".to_string()),
+        };
+
+        let article = Article {
+            slug: "rust-article".to_string(),
+            metadata: metadata.clone(),
+            version: 1,
+            updated_at: Utc::now(),
+            file_path: String::new(),
+            last_modified: SystemTime::now(),
+            deleted: false,
+        };
+
+        // Tag filter matches
+        assert!(matches_filters(
+            &article,
+            &Some("rust".to_string()),
+            &None,
+            &None,
+            &None
+        ));
+
+        // Category filter mismatch
+        assert!(!matches_filters(
+            &article,
+            &None,
+            &Some("other".to_string()),
+            &None,
+            &None
+        ));
+
+        // Query matches title
+        assert!(matches_filters(
+            &article,
+            &None,
+            &None,
+            &None,
+            &Some("rust".to_string())
+        ));
+
+        // Search slugs override query
+        let mut slugs = HashSet::new();
+        slugs.insert(article.slug.clone());
+        assert!(matches_filters(
+            &article,
+            &None,
+            &None,
+            &Some(slugs),
+            &Some("nomatch".to_string())
+        ));
     }
 }
