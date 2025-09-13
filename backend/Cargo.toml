@@ -55,7 +55,7 @@ cookie = { version = "0.18", features = ["key-expansion"] }
 slug = "0.1"
 ammonia = "3.3"
 pulldown-cmark = "0.10"
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls", "macros"] }
 
 [dev-dependencies]
 tempfile = "3.10"
