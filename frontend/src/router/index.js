@@ -9,6 +9,9 @@ import NotesView from '../views/NotesView.vue'
 import NoteView from '../views/NoteView.vue'
 import LoginView from '../views/LoginView.vue'
 import AuthCallbackView from '../views/AuthCallbackView.vue'
+import AuthGuardView from '../views/AuthGuard.vue'
+import useAuth from '../composables/useAuth'
+import { ElMessage } from 'element-plus'
 
 const routes = [
   {
@@ -46,7 +49,8 @@ const routes = [
   },
   {
     path: '/articles/new',
-    component: () => import('../views/ArticleNewView.vue')
+    component: () => import('../views/ArticleNewView.vue'),
+    meta: { requiresAuthor: true }
   },
   {
     path: '/articles/:slug',
@@ -72,12 +76,33 @@ const routes = [
     path: '/auth/callback',
     name: 'auth-callback',
     component: AuthCallbackView
+  },
+  {
+    path: '/forbidden',
+    name: 'forbidden',
+    component: AuthGuardView
   }
 ]
 
 const router = createRouter({
   history: createWebHistory(process.env.BASE_URL),
   routes
+})
+
+const { isAuthenticated, isAuthor } = useAuth()
+
+router.beforeEach((to, from, next) => {
+  if (to.meta.requiresAuthor && !isAuthor.value) {
+    ElMessage.error('Insufficient permissions')
+    next({ name: 'forbidden' })
+    return
+  }
+  if (to.meta.requiresAuth && !isAuthenticated.value) {
+    ElMessage.error('Insufficient permissions')
+    next({ name: 'forbidden' })
+    return
+  }
+  next()
 })
 
 export default router
