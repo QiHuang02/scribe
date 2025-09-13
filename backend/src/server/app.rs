@@ -131,7 +131,8 @@ pub async fn start_server(
         .merge(crate::handlers::tags::create_router())
         .merge(crate::handlers::categories::create_router())
         .merge(crate::handlers::search::create_router())
-        .merge(crate::handlers::sitemap::create_router());
+        .merge(crate::handlers::sitemap::create_router())
+        .merge(crate::handlers::users::create_router());
 
     if config.comments {
         app = app

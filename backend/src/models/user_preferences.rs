@@ -9,4 +9,7 @@ pub struct UserPreferences {
     pub display_name: Option<String>,
     pub bio: Option<String>,
     pub avatar: Option<String>,
+    pub website: Option<String>,
+    pub theme: Option<String>,
+    pub language: Option<String>,
 }
