@@ -191,6 +191,9 @@ impl SearchService {
         }
 
         for article in to_index {
+            let term = Term::from_field_text(self.slug_field, &article.slug);
+            index_writer.delete_term(term);
+
             if !article.metadata.draft {
                 let tags_text = article.metadata.tags.join(" ");
                 let category_text = article.metadata.category.as_deref().unwrap_or("");
