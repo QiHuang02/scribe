@@ -1,6 +1,8 @@
-use crate::config::{get_github_client_id, get_github_client_secret, get_author_github_username};
+use crate::config::{get_author_github_username, get_github_client_id, get_github_client_secret};
 use crate::handlers::error::{AppError, ERR_INTERNAL_SERVER, ERR_UNAUTHORIZED};
+use crate::handlers::users::{apply_github_profile, fetch_github_profile};
 use crate::models::user::{User, UserInfo};
+use crate::models::user_preferences::UserPreferences;
 use crate::server::app::AppState;
 use axum::extract::{FromRef, Query, State};
 use axum::response::Redirect;
@@ -14,8 +16,7 @@ use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
     TokenResponse, TokenUrl,
 };
-use reqwest::header::USER_AGENT;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -80,12 +81,6 @@ struct AuthRequest {
     state: String,
 }
 
-#[derive(Serialize, Deserialize)]
-struct GitHubUser {
-    id: u64,
-    login: String,
-}
-
 async fn github_callback(
     State(state): State<Arc<AppState>>,
     jar: SignedJar,
@@ -115,28 +110,18 @@ async fn github_callback(
             message: e.to_string(),
         })?;
 
-    let github_user: GitHubUser = reqwest::Client::new()
-        .get("https://api.github.com/user")
-        .header(USER_AGENT, "scribe")
-        .bearer_auth(token.access_token().secret())
-        .send()
-        .await
-        .map_err(|e| AppError::InternalServerError {
-            code: ERR_INTERNAL_SERVER,
-            message: e.to_string(),
-        })?
-        .json()
-        .await
-        .map_err(|e| AppError::InternalServerError {
-            code: ERR_INTERNAL_SERVER,
-            message: e.to_string(),
-        })?;
+    let profile = fetch_github_profile(token.access_token().secret()).await?;
 
     // Determine if user is the author
     let author_username = get_author_github_username().unwrap_or_default();
-    let is_author = github_user.login == author_username;
+    let is_author = profile.login == author_username;
 
-    let user = User::new(github_user.id, github_user.login, is_author);
+    let mut user = User::new(profile.id, profile.login.clone(), is_author);
+
+    // In a real application, preferences would be loaded from storage
+    let prefs = UserPreferences::default();
+    apply_github_profile(&mut user, &profile, Some(&prefs));
+
     let user_info = UserInfo::from(user.clone());
 
     // Create signed cookie with user info

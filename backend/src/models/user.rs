@@ -12,6 +12,8 @@ pub struct User {
     pub github_login: String,
     pub role: UserRole,
     pub display_name: Option<String>,
+    pub bio: Option<String>,
+    pub avatar: Option<String>,
 }
 
 impl User {
@@ -21,6 +23,8 @@ impl User {
             github_login: github_login.clone(),
             role: if is_author { UserRole::Author } else { UserRole::Visitor },
             display_name: Some(github_login),
+            bio: None,
+            avatar: None,
         }
     }
 
@@ -39,18 +43,22 @@ pub struct UserInfo {
     pub github_login: String,
     pub role: UserRole,
     pub display_name: String,
+    pub bio: Option<String>,
+    pub avatar: Option<String>,
     pub is_author: bool,
 }
 
 impl From<User> for UserInfo {
     fn from(user: User) -> Self {
         let github_login_clone = user.github_login.clone();
-        let is_author = user.is_author(); // Call before consuming user
+        let is_author = user.is_author();
         Self {
             github_id: user.github_id,
             github_login: user.github_login,
-            role: user.role.clone(),
+            role: user.role,
             display_name: user.display_name.unwrap_or(github_login_clone),
+            bio: user.bio,
+            avatar: user.avatar,
             is_author,
         }
     }
