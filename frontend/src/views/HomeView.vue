@@ -1,12 +1,12 @@
 <template>
   <div class="home">
-    <ul v-if="store.articles.length">
-      <li v-for="a in store.articles" :key="a.slug">
-        <router-link :to="`/articles/${a.slug}`">{{ a.metadata.title }}</router-link>
-      </li>
-    </ul>
-    <p v-else-if="error">{{ error }}</p>
-    <p v-else>Loading...</p>
+    <StateWrapper :loading="loading" :error="error" :data="store.articles">
+      <ul>
+        <li v-for="a in store.articles" :key="a.slug">
+          <router-link :to="`/articles/${a.slug}`">{{ a.metadata.title }}</router-link>
+        </li>
+      </ul>
+    </StateWrapper>
   </div>
 </template>
 
@@ -14,12 +14,15 @@
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMainStore } from '../store'
+import StateWrapper from '../components/StateWrapper.vue'
 
 const store = useMainStore()
 const error = ref('')
+const loading = ref(false)
 const route = useRoute()
 
 const fetchArticles = async () => {
+  loading.value = true
   try {
     const params = {}
     if (route.query.tag) params.tag = route.query.tag
@@ -28,6 +31,8 @@ const fetchArticles = async () => {
     error.value = ''
   } catch (e) {
     error.value = 'Failed to load'
+  } finally {
+    loading.value = false
   }
 }
 
