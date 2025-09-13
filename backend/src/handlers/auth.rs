@@ -85,7 +85,7 @@ async fn github_callback(
     State(state): State<Arc<AppState>>,
     jar: SignedJar,
     Query(query): Query<AuthRequest>,
-) -> Result<(SignedJar, Json<UserInfo>), AppError> {
+) -> Result<(SignedJar, Redirect), AppError> {
     let state_cookie = jar.get("oauth_state").ok_or(AppError::Unauthorized {
         code: ERR_UNAUTHORIZED,
         message: "missing oauth state".to_string(),
@@ -122,8 +122,6 @@ async fn github_callback(
     let prefs = UserPreferences::default();
     apply_github_profile(&mut user, &profile, Some(&prefs));
 
-    let user_info = UserInfo::from(user.clone());
-
     // Create signed cookie with user info
     let user_json = serde_json::to_string(&user).map_err(|e| AppError::InternalServerError {
         code: ERR_INTERNAL_SERVER,
@@ -140,7 +138,7 @@ async fn github_callback(
             .build(),
     );
 
-    Ok((jar, Json(user_info)))
+    Ok((jar, Redirect::to("http://localhost:8080/author")))
 }
 
 async fn get_current_user(jar: SignedJar) -> Result<Json<UserInfo>, AppError> {
