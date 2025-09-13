@@ -5,7 +5,7 @@ use crate::handlers::error::{
 use crate::models::article::{
     Article, ArticleContent, ArticleRepresentation, ArticleTeaser, Metadata, PaginatedArticles,
 };
-use crate::server::app::{AppState, reindex_all_content};
+use crate::server::app::{AppState, IndexJob};
 use crate::server::auth::require_admin;
 use crate::services::article_service::save_version;
 use crate::services::service::ArticleStore;
@@ -361,7 +361,14 @@ async fn create_article(
         &file_path,
     )
     .await?;
-    reindex_all_content(&state).await;
+    if let Some(tx) = &state.index_tx {
+        let article_content = ArticleContent {
+            slug: slug.clone(),
+            metadata: metadata.clone(),
+            content: payload.content.clone(),
+        };
+        let _ = tx.send(IndexJob::Index(article_content));
+    }
     state.cache.invalidate_all();
     Ok(build_response(&slug))
 }
@@ -446,7 +453,14 @@ async fn update_article(
         }
     }
 
-    reindex_all_content(&state).await;
+    if let Some(tx) = &state.index_tx {
+        let article_content = ArticleContent {
+            slug: slug.clone(),
+            metadata: metadata.clone(),
+            content: payload.content.clone(),
+        };
+        let _ = tx.send(IndexJob::Index(article_content));
+    }
     state.cache.invalidate_all();
 
     Ok(Json(json!({ "slug": slug, "message": "Article updated" })))
@@ -488,10 +502,10 @@ async fn get_article_by_slug(
 mod tests {
     use super::*;
     use crate::config::ENABLE_NESTED_CATEGORIES;
-    use tempfile::tempdir;
+    use chrono::Utc;
     use std::collections::HashSet;
     use std::time::SystemTime;
-    use chrono::Utc;
+    use tempfile::tempdir;
 
     async fn setup_store() -> (
         tempfile::TempDir,
