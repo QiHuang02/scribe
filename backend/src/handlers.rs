@@ -9,3 +9,4 @@ pub mod root;
 pub mod search;
 pub mod sitemap;
 pub mod tags;
+pub mod users;

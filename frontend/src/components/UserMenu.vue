@@ -12,7 +12,7 @@
       <div class="user-dropdown" @click="toggleDropdown" ref="dropdownRef">
         <div class="user-info">
           <img
-            :src="`https://github.com/${user?.github_login}.png`"
+            :src="user?.avatar || `https://github.com/${user?.github_login}.png`"
             :alt="user?.display_name"
             class="user-avatar"
           />
