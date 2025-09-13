@@ -1,20 +1,33 @@
 import { defineStore } from 'pinia'
 import useApi from '../composables/useApi'
-import {
-  getToken as loadToken,
-  setToken as saveToken,
-  clearToken,
-  isAdmin,
-  setIsAdmin
-} from '../utils/storage'
+import useAuth from '../composables/useAuth'
 
 export const useMainStore = defineStore('main', {
   state: () => ({
     articles: [],
     currentArticle: null,
-    user: { isAdmin: isAdmin() },
-    token: loadToken() || ''
   }),
+
+  getters: {
+    // 从 useAuth composable 获取用户状态
+    user: () => {
+      const { currentUser } = useAuth()
+      return currentUser.value
+    },
+    isAuthenticated: () => {
+      const { isAuthenticated } = useAuth()
+      return isAuthenticated.value
+    },
+    isAuthor: () => {
+      const { isAuthor } = useAuth()
+      return isAuthor.value
+    },
+    isVisitor: () => {
+      const { isVisitor } = useAuth()
+      return isVisitor.value
+    }
+  },
+
   actions: {
     async fetchArticles(params = {}) {
       const query = new URLSearchParams(params).toString()
@@ -27,6 +40,7 @@ export const useMainStore = defineStore('main', {
         throw new Error(api.error.value)
       }
     },
+
     async fetchArticle(slug) {
       const api = useApi()
       await api.request(`/api/articles/${slug}`)
@@ -37,17 +51,21 @@ export const useMainStore = defineStore('main', {
         throw new Error(api.error.value)
       }
     },
-    setUser(user) {
-      this.user = user
-      setIsAdmin(user?.isAdmin)
+
+    // 认证相关方法
+    async initializeAuth() {
+      const { getCurrentUser } = useAuth()
+      await getCurrentUser()
     },
-    setToken(token) {
-      this.token = token
-      if (token) {
-        saveToken(token)
-      } else {
-        clearToken()
-      }
+
+    async loginWithGitHub() {
+      const { loginWithGitHub } = useAuth()
+      loginWithGitHub()
+    },
+
+    async logout() {
+      const { logout } = useAuth()
+      logout()
     }
   }
 })

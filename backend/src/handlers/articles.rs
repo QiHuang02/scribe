@@ -6,7 +6,7 @@ use crate::models::article::{
     Article, ArticleContent, ArticleRepresentation, ArticleTeaser, Metadata, PaginatedArticles,
 };
 use crate::server::app::{AppState, IndexJob};
-use crate::server::auth::require_admin;
+use crate::server::auth::require_author;
 use crate::services::article_service::save_version;
 use crate::services::service::ArticleStore;
 use axum::extract::{Path, Query, State};
@@ -94,12 +94,12 @@ pub fn create_router() -> Router<Arc<AppState>> {
         .route("/api/articles", get(get_articles_list))
         .route(
             "/api/articles",
-            post(create_article).route_layer(middleware::from_fn(require_admin)),
+            post(create_article).route_layer(middleware::from_fn(require_author)),
         )
         .route("/api/articles/{slug}", get(get_article_by_slug))
         .route(
             "/api/articles/{slug}",
-            put(update_article).route_layer(middleware::from_fn(require_admin)),
+            put(update_article).route_layer(middleware::from_fn(require_author)),
         )
 }
 
@@ -510,12 +510,12 @@ mod tests {
     async fn setup_store() -> (
         tempfile::TempDir,
         Arc<RwLock<ArticleStore>>,
-        std::path::PathBuf,
+        PathBuf,
     ) {
         let dir = tempdir().unwrap();
         let original = std::env::current_dir().unwrap();
         std::env::set_current_dir(dir.path()).unwrap();
-        std::fs::create_dir("article").unwrap();
+        fs::create_dir("article").unwrap();
         let store = Arc::new(RwLock::new(
             ArticleStore::new("article", ENABLE_NESTED_CATEGORIES).unwrap(),
         ));

@@ -48,7 +48,7 @@ walkdir = "2.5.0"
 tantivy = "0.25.0"
 
 # OAuth2 支持
-oauth2 = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
+oauth2 = { version = "4.4.2", default-features = false, features = ["reqwest", "rustls-tls"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 axum-extra = { version = "0.10", features = ["cookie", "cookie-signed"] }
 cookie = { version = "0.18", features = ["key-expansion"] }

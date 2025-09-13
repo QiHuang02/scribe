@@ -1,6 +1,6 @@
 use crate::handlers::error::{AppError, ERR_EMPTY_SEARCH_QUERY, ERR_FULLTEXT_DISABLED};
 use crate::server::app::{AppState, reindex_all_content};
-use crate::server::auth::require_admin;
+use crate::server::auth::require_author;
 use crate::services::search::SearchResult;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
@@ -40,7 +40,7 @@ pub fn create_router() -> Router<Arc<AppState>> {
         .route("/api/search/popular", get(get_popular_searches))
         .route(
             "/api/search/reindex",
-            post(trigger_reindex).route_layer(middleware::from_fn(require_admin)),
+            post(trigger_reindex).route_layer(middleware::from_fn(require_author)),
         )
 }
 

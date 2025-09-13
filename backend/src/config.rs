@@ -107,6 +107,7 @@ pub fn initialize_config() -> Result<Arc<Config>, Box<dyn std::error::Error>> {
         .map_err(|e| format!("Configuration validation failed: {}", e))?;
     // Validate required environment variables using their respective helpers
     get_admin_token_hash()?;
+    get_author_github_username()?;
     if config.comments {
         get_github_client_id()?;
         get_github_client_secret()?;
@@ -134,6 +135,11 @@ pub fn get_github_client_id() -> Result<String, Box<dyn std::error::Error>> {
 pub fn get_github_client_secret() -> Result<String, Box<dyn std::error::Error>> {
     env::var("GITHUB_CLIENT_SECRET")
         .map_err(|_| "GITHUB_CLIENT_SECRET environment variable must be set".into())
+}
+
+pub fn get_author_github_username() -> Result<String, Box<dyn std::error::Error>> {
+    env::var("AUTHOR_GITHUB_USERNAME")
+        .map_err(|_| "AUTHOR_GITHUB_USERNAME environment variable must be set".into())
 }
 
 pub fn initialize_logging(config: &Config) {

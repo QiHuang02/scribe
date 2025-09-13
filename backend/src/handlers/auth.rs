@@ -1,5 +1,6 @@
-use crate::config::{get_github_client_id, get_github_client_secret};
+use crate::config::{get_github_client_id, get_github_client_secret, get_author_github_username};
 use crate::handlers::error::{AppError, ERR_INTERNAL_SERVER, ERR_UNAUTHORIZED};
+use crate::models::user::{User, UserInfo};
 use crate::server::app::AppState;
 use axum::extract::{FromRef, Query, State};
 use axum::response::Redirect;
@@ -38,6 +39,7 @@ pub fn create_router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/auth/github/login", get(github_login))
         .route("/api/auth/github/callback", get(github_callback))
+        .route("/api/auth/me", get(get_current_user))
 }
 
 fn oauth_client(state: &AppState) -> BasicClient {
@@ -88,7 +90,7 @@ async fn github_callback(
     State(state): State<Arc<AppState>>,
     jar: SignedJar,
     Query(query): Query<AuthRequest>,
-) -> Result<(SignedJar, Json<GitHubUser>), AppError> {
+) -> Result<(SignedJar, Json<UserInfo>), AppError> {
     let state_cookie = jar.get("oauth_state").ok_or(AppError::Unauthorized {
         code: ERR_UNAUTHORIZED,
         message: "missing oauth state".to_string(),
@@ -113,7 +115,7 @@ async fn github_callback(
             message: e.to_string(),
         })?;
 
-    let user: GitHubUser = reqwest::Client::new()
+    let github_user: GitHubUser = reqwest::Client::new()
         .get("https://api.github.com/user")
         .header(USER_AGENT, "scribe")
         .bearer_auth(token.access_token().secret())
@@ -130,5 +132,42 @@ async fn github_callback(
             message: e.to_string(),
         })?;
 
-    Ok((jar, Json(user)))
+    // Determine if user is the author
+    let author_username = get_author_github_username().unwrap_or_default();
+    let is_author = github_user.login == author_username;
+
+    let user = User::new(github_user.id, github_user.login, is_author);
+    let user_info = UserInfo::from(user.clone());
+
+    // Create signed cookie with user info
+    let user_json = serde_json::to_string(&user).map_err(|e| AppError::InternalServerError {
+        code: ERR_INTERNAL_SERVER,
+        message: e.to_string(),
+    })?;
+
+    let is_secure_cookie = state.config.github_redirect_url.starts_with("https://");
+    let jar = jar.add(
+        Cookie::build(("user_session", user_json))
+            .http_only(true)
+            .same_site(SameSite::Lax)
+            .secure(is_secure_cookie)
+            .max_age(cookie::time::Duration::days(30))
+            .build(),
+    );
+
+    Ok((jar, Json(user_info)))
+}
+
+async fn get_current_user(jar: SignedJar) -> Result<Json<UserInfo>, AppError> {
+    let user_cookie = jar.get("user_session").ok_or(AppError::Unauthorized {
+        code: ERR_UNAUTHORIZED,
+        message: "Not authenticated".to_string(),
+    })?;
+
+    let user: User = serde_json::from_str(user_cookie.value()).map_err(|_| AppError::Unauthorized {
+        code: ERR_UNAUTHORIZED,
+        message: "Invalid session".to_string(),
+    })?;
+
+    Ok(Json(UserInfo::from(user)))
 }

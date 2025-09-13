@@ -7,6 +7,8 @@ import TagsView from '../views/TagsView.vue'
 import SearchView from '../views/SearchView.vue'
 import NotesView from '../views/NotesView.vue'
 import NoteView from '../views/NoteView.vue'
+import LoginView from '../views/LoginView.vue'
+import AuthCallbackView from '../views/AuthCallbackView.vue'
 
 const routes = [
   {
@@ -60,6 +62,16 @@ const routes = [
     path: '/search',
     name: 'search',
     component: SearchView
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: LoginView
+  },
+  {
+    path: '/auth/callback',
+    name: 'auth-callback',
+    component: AuthCallbackView
   }
 ]
 
