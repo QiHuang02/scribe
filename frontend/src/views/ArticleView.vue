@@ -25,6 +25,7 @@ import { useRoute } from 'vue-router'
 import DOMPurify from 'dompurify'
 import { md } from '../utils/markdown'
 import { useMainStore } from '../store'
+import { ElMessageBox } from 'element-plus'
 
 const route = useRoute()
 const store = useMainStore()
@@ -57,6 +58,9 @@ async function loadVersions() {
 
 async function restore(version) {
   try {
+    await ElMessageBox.confirm('Are you sure you want to restore this version?', 'Confirm', {
+      type: 'warning'
+    })
     const token = store.token
     await fetch(`/api/articles/${route.params.slug}/versions/${version}/restore`, {
       method: 'POST',
