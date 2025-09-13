@@ -20,7 +20,7 @@ export default function useApi(initialValue = null) {
         }
         throw new Error(message)
       }
-      data.value = await res.json()
+      data.value = (await res.json()) || initialValue
     } catch (e) {
       error.value = e.message || 'Failed to load'
     } finally {
