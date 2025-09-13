@@ -53,6 +53,8 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 axum-extra = { version = "0.10", features = ["cookie", "cookie-signed"] }
 cookie = { version = "0.18", features = ["key-expansion"] }
 slug = "0.1"
+ammonia = "3.3"
+pulldown-cmark = "0.10"
 
 [dev-dependencies]
 tempfile = "3.10"
