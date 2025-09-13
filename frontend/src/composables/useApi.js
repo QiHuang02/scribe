@@ -1,8 +1,23 @@
 import { ref } from 'vue'
 
+// Map raw error details to concise user-facing messages
+const getErrorMessage = (status, message, error) => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return 'Network unreachable'
+  }
+  if (status === 401) {
+    return 'Unauthorized'
+  }
+  if (error?.message && error.message.toLowerCase().includes('failed to fetch')) {
+    return 'Network unreachable'
+  }
+  return message || 'Failed to load'
+}
+
 export default function useApi(initialValue = null, { retries = 3, retryDelay = 500 } = {}) {
   const data = ref(initialValue)
   const error = ref('')
+  const status = ref(null)
   const loading = ref(false)
 
   let controller
@@ -21,6 +36,7 @@ export default function useApi(initialValue = null, { retries = 3, retryDelay = 
 
     loading.value = true
     error.value = ''
+    status.value = null
 
     const maxRetries = config.retries ?? retries
     const baseDelay = config.retryDelay ?? retryDelay
@@ -39,7 +55,9 @@ export default function useApi(initialValue = null, { retries = 3, retryDelay = 
           } catch (_) {
             // ignore parse error
           }
-          throw new Error(message)
+          const err = new Error(message)
+          err.status = res.status
+          throw err
         }
         data.value = (await res.json()) || initialValue
         loading.value = false
@@ -61,9 +79,11 @@ export default function useApi(initialValue = null, { retries = 3, retryDelay = 
       }
     }
 
-    error.value = lastError?.message || 'Failed to load'
+    console.error(lastError)
+    status.value = lastError?.status || null
+    error.value = getErrorMessage(status.value, lastError?.message, lastError)
     loading.value = false
   }
 
-  return { data, error, loading, request, cancel }
+  return { data, error, status, loading, request, cancel }
 }
