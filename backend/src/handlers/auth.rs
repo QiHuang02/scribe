@@ -134,6 +134,7 @@ async fn github_callback(
             .http_only(true)
             .same_site(SameSite::Lax)
             .secure(is_secure_cookie)
+            .path("/")
             .max_age(cookie::time::Duration::days(30))
             .build(),
     );
@@ -147,10 +148,11 @@ async fn get_current_user(jar: SignedJar) -> Result<Json<UserInfo>, AppError> {
         message: "Not authenticated".to_string(),
     })?;
 
-    let user: User = serde_json::from_str(user_cookie.value()).map_err(|_| AppError::Unauthorized {
-        code: ERR_UNAUTHORIZED,
-        message: "Invalid session".to_string(),
-    })?;
+    let user: User =
+        serde_json::from_str(user_cookie.value()).map_err(|_| AppError::Unauthorized {
+            code: ERR_UNAUTHORIZED,
+            message: "Invalid session".to_string(),
+        })?;
 
     Ok(Json(UserInfo::from(user)))
 }
