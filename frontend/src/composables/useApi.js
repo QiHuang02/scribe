@@ -63,11 +63,16 @@ export default function useApi(initialValue = null, { retries = 3, retryDelay = 
         loading.value = false
         return
       } catch (e) {
-        if (currentController !== controller) {
+        if (
+          e.name === 'AbortError' ||
+          (typeof DOMException !== 'undefined' && e instanceof DOMException)
+        ) {
+          if (controller === null) {
+            loading.value = false
+          }
           return
         }
-        if (e.name === 'AbortError' || (typeof DOMException !== 'undefined' && e instanceof DOMException)) {
-          loading.value = false
+        if (currentController !== controller) {
           return
         }
         lastError = e
