@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import useApi from '../composables/useApi'
 import {
   getToken as loadToken,
   setToken as saveToken,
@@ -17,22 +18,23 @@ export const useMainStore = defineStore('main', {
   actions: {
     async fetchArticles(params = {}) {
       const query = new URLSearchParams(params).toString()
-      const res = await fetch(`/api/articles${query ? `?${query}` : ''}`)
-      if (res.ok) {
-        const data = await res.json()
-        this.articles = data.articles || []
+      const api = useApi({ articles: [] })
+      await api.request(`/api/articles${query ? `?${query}` : ''}`)
+      if (!api.error.value) {
+        this.articles = api.data.value.articles || []
       } else {
         this.articles = []
-        throw new Error('Request failed')
+        throw new Error(api.error.value)
       }
     },
     async fetchArticle(slug) {
-      const res = await fetch(`/api/articles/${slug}`)
-      if (res.ok) {
-        this.currentArticle = await res.json()
+      const api = useApi()
+      await api.request(`/api/articles/${slug}`)
+      if (!api.error.value) {
+        this.currentArticle = api.data.value
       } else {
         this.currentArticle = null
-        throw new Error('Request failed')
+        throw new Error(api.error.value)
       }
     },
     setUser(user) {
