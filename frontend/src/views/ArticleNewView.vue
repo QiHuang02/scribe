@@ -130,6 +130,7 @@ async function submit() {
   try {
     await formRef.value.validate()
   } catch {
+    ElMessage.error('请完善必填项')
     return
   }
   try {
