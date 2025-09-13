@@ -127,7 +127,14 @@ async fn log_errors(req: Request<Body>, next: Next) -> Response {
     res
 }
 
-async fn watch_articles(state: Arc<AppState>) {
+async fn watch_directory<F>(
+    dir: &'static str,
+    state: Arc<AppState>,
+    store_ref: F,
+    is_notes: bool,
+) where
+    F: Fn(&AppState) -> &RwLock<ArticleStore> + Send + Sync + 'static,
+{
     let (tx, mut rx) = mpsc::unbounded_channel();
 
     let tx_watcher = tx.clone();
@@ -148,20 +155,25 @@ async fn watch_articles(state: Arc<AppState>) {
             }
         };
 
-    if let Err(e) = watcher.watch(std::path::Path::new(ARTICLE_DIR), RecursiveMode::Recursive) {
-        error!("Failed to watch directory '{}': {:?}", ARTICLE_DIR, e);
+    if let Err(e) = watcher.watch(std::path::Path::new(dir), RecursiveMode::Recursive) {
+        error!("Failed to watch directory '{}': {:?}", dir, e);
         return;
     }
 
-    info!("Hot reloading enable for '{}'", ARTICLE_DIR);
+    info!("Hot reloading enable for '{}'", dir);
+
+    let nested_categories = if is_notes { true } else { ENABLE_NESTED_CATEGORIES };
+    let prefix = if is_notes { "notes/" } else { "" };
+    let entity = if is_notes { "note" } else { "article" };
+    let entity_plural = if is_notes { "Notes" } else { "Articles" };
 
     while rx.recv().await.is_some() {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         info!("File change detected, performing incremental update...");
-        let mut store_guard = state.store.write().await;
+        let mut store_guard = store_ref(&state).write().await;
 
-        let changes = match store_guard.detect_file_changes(ARTICLE_DIR, ENABLE_NESTED_CATEGORIES) {
+        let changes = match store_guard.detect_file_changes(dir, nested_categories) {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!("Error detecting file changes: {:?}", e);
@@ -180,24 +192,35 @@ async fn watch_articles(state: Arc<AppState>) {
                 if let Some(article) =
                     store_guard.query(|a| a.file_path == change.path, 0, usize::MAX).next()
                 {
-                    removed_map.insert(change.path.clone(), article.slug.clone());
+                    let slug = if is_notes {
+                        format!("{}{}", prefix, article.slug_with_category())
+                    } else {
+                        article.slug.clone()
+                    };
+                    removed_map.insert(change.path.clone(), slug);
                 }
             }
         }
 
-        match store_guard.incremental_update(ARTICLE_DIR, ENABLE_NESTED_CATEGORIES) {
+        match store_guard.incremental_update(dir, nested_categories) {
             Ok(true) => {
                 if let Some(search_service) = &state.search_service {
                     for change in &changes {
                         match change.change_type {
                             FileChange::Added | FileChange::Modified => {
                                 if let Some(article) =
-                                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX).next()
+                                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX)
+                                        .next()
                                 {
                                     match store_guard.load_content_for(article) {
                                         Ok(content) => {
+                                            let slug = if is_notes {
+                                                format!("{}{}", prefix, article.slug_with_category())
+                                            } else {
+                                                article.slug.clone()
+                                            };
                                             let article_content = ArticleContent {
-                                                slug: article.slug.clone(),
+                                                slug,
                                                 metadata: article.metadata.clone(),
                                                 content,
                                             };
@@ -206,7 +229,8 @@ async fn watch_articles(state: Arc<AppState>) {
                                                 state.config.search_index_heap_size,
                                             ) {
                                                 tracing::warn!(
-                                                    "Failed to index article {}: {:?}",
+                                                    "Failed to index {} {}: {:?}",
+                                                    entity,
                                                     article.slug,
                                                     e
                                                 );
@@ -214,7 +238,8 @@ async fn watch_articles(state: Arc<AppState>) {
                                         }
                                         Err(e) => {
                                             tracing::warn!(
-                                                "Failed to load content for article {}: {:?}",
+                                                "Failed to load content for {} {}: {:?}",
+                                                entity,
                                                 article.slug,
                                                 e
                                             );
@@ -228,7 +253,8 @@ async fn watch_articles(state: Arc<AppState>) {
                                         .remove_article(slug, state.config.search_index_heap_size)
                                     {
                                         tracing::warn!(
-                                            "Failed to remove article {}: {:?}",
+                                            "Failed to remove {} {}: {:?}",
+                                            entity,
                                             slug,
                                             e
                                         );
@@ -240,7 +266,7 @@ async fn watch_articles(state: Arc<AppState>) {
                 }
 
                 state.cache.invalidate_all();
-                info!("Articles updated incrementally!");
+                info!("{} updated incrementally!", entity_plural);
             }
             Ok(false) => {
                 tracing::debug!("No file changes detected, skipping update");
@@ -248,7 +274,7 @@ async fn watch_articles(state: Arc<AppState>) {
             Err(e) => {
                 tracing::error!("Error during incremental update: {:?}", e);
                 info!("Falling back to full reload...");
-                match ArticleStore::new(ARTICLE_DIR, ENABLE_NESTED_CATEGORIES) {
+                match ArticleStore::new(dir, nested_categories) {
                     Ok(new_store) => {
                         *store_guard = new_store;
 
@@ -266,146 +292,12 @@ async fn watch_articles(state: Arc<AppState>) {
     }
 }
 
+async fn watch_articles(state: Arc<AppState>) {
+    watch_directory(ARTICLE_DIR, state, |s| &s.store, false).await;
+}
+
 async fn watch_notes(state: Arc<AppState>) {
-    let (tx, mut rx) = mpsc::unbounded_channel();
-
-    let tx_watcher = tx.clone();
-    let mut watcher =
-        match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-            if let Ok(event) = res
-                && (event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove())
-            {
-                if tx_watcher.send(()).is_err() {
-                    error!("File change notification receiver dropped");
-                }
-            }
-        }) {
-            Ok(w) => w,
-            Err(e) => {
-                error!("Failed to initialize file watcher: {:?}", e);
-                return;
-            }
-        };
-
-    if let Err(e) = watcher.watch(std::path::Path::new(NOTES_DIR), RecursiveMode::Recursive) {
-        error!("Failed to watch directory '{}': {:?}", NOTES_DIR, e);
-        return;
-    }
-
-    info!("Hot reloading enable for '{}'", NOTES_DIR);
-
-    while rx.recv().await.is_some() {
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        info!("File change detected, performing incremental update...");
-        let mut store_guard = state.note_store.write().await;
-
-        let changes = match store_guard.detect_file_changes(NOTES_DIR, true) {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::error!("Error detecting file changes: {:?}", e);
-                continue;
-            }
-        };
-
-        if changes.is_empty() {
-            tracing::debug!("No file changes detected, skipping update");
-            continue;
-        }
-
-        let mut removed_map = HashMap::new();
-        for change in &changes {
-            if matches!(change.change_type, FileChange::Removed) {
-                if let Some(article) =
-                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX).next()
-                {
-                    removed_map.insert(
-                        change.path.clone(),
-                        format!("notes/{}", article.slug_with_category()),
-                    );
-                }
-            }
-        }
-
-        match store_guard.incremental_update(NOTES_DIR, true) {
-            Ok(true) => {
-                if let Some(search_service) = &state.search_service {
-                    for change in &changes {
-                        match change.change_type {
-                            FileChange::Added | FileChange::Modified => {
-                                if let Some(article) =
-                                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX)
-                                        .next()
-                                {
-                                    match store_guard.load_content_for(article) {
-                                        Ok(content) => {
-                                            let article_content = ArticleContent {
-                                                slug: format!(
-                                                    "notes/{}",
-                                                    article.slug_with_category()
-                                                ),
-                                                metadata: article.metadata.clone(),
-                                                content,
-                                            };
-                                            if let Err(e) = search_service.index_article(
-                                                &article_content,
-                                                state.config.search_index_heap_size,
-                                            ) {
-                                                tracing::warn!(
-                                                    "Failed to index note {}: {:?}",
-                                                    article.slug,
-                                                    e
-                                                );
-                                            }
-                                        }
-                                        Err(e) => {
-                                            tracing::warn!(
-                                                "Failed to load content for note {}: {:?}",
-                                                article.slug,
-                                                e
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            FileChange::Removed => {
-                                if let Some(slug) = removed_map.get(&change.path) {
-                                    if let Err(e) = search_service
-                                        .remove_article(slug, state.config.search_index_heap_size)
-                                    {
-                                        tracing::warn!("Failed to remove note {}: {:?}", slug, e);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                state.cache.invalidate_all();
-                info!("Notes updated incrementally!");
-            }
-            Ok(false) => {
-                tracing::debug!("No file changes detected, skipping update");
-            }
-            Err(e) => {
-                tracing::error!("Error during incremental update: {:?}", e);
-                info!("Falling back to full reload...");
-                match ArticleStore::new(NOTES_DIR, true) {
-                    Ok(new_store) => {
-                        *store_guard = new_store;
-
-                        reindex_all_content(&state).await;
-                        state.cache.invalidate_all();
-
-                        info!("Full reload completed successfully!");
-                    }
-                    Err(e) => {
-                        tracing::error!("Full reload also failed: {:?}", e);
-                    }
-                }
-            }
-        }
-    }
+    watch_directory(NOTES_DIR, state, |s| &s.note_store, true).await;
 }
 
 pub async fn reindex_all_content(state: &Arc<AppState>) {
