@@ -15,6 +15,7 @@ import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMainStore } from '../store'
 import StateWrapper from '../components/StateWrapper.vue'
+import debounce from '../utils/debounce'
 
 const store = useMainStore()
 const error = ref('')
@@ -35,8 +36,9 @@ const fetchArticles = async () => {
     loading.value = false
   }
 }
+const debouncedFetchArticles = debounce(fetchArticles, 300)
 
-watch(() => route.query, fetchArticles, { immediate: true })
+watch(() => route.query, debouncedFetchArticles, { immediate: true })
 </script>
 
 <style scoped>
