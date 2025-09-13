@@ -66,9 +66,9 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { getToken } from '../utils/storage'
+import { md } from '../utils/markdown'
 
 const form = ref({
   title: '',
@@ -85,7 +85,6 @@ const rules = {
 }
 
 const isPreview = ref(false)
-const md = new MarkdownIt()
 const previewHTML = computed(() =>
   DOMPurify.sanitize(md.render(form.value.content || ''))
 )

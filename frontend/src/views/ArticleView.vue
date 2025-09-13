@@ -22,17 +22,15 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { getToken, isAdmin } from '../utils/storage'
+import { md } from '../utils/markdown'
 
 const route = useRoute()
 const article = ref(null)
 const versions = ref([])
 const error = ref('')
 const isAuthorized = isAdmin()
-
-const md = new MarkdownIt()
 
 const sanitizedHtml = computed(() => {
   if (!article.value) return ''
