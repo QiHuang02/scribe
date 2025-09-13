@@ -22,11 +22,17 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
+pub enum IndexJob {
+    Index(ArticleContent),
+    Remove(String),
+}
+
 pub struct AppState {
     pub store: Arc<RwLock<ArticleStore>>,
     pub note_store: Arc<RwLock<ArticleStore>>,
     pub config: Arc<Config>,
     pub search_service: Option<Arc<SearchService>>,
+    pub index_tx: Option<mpsc::UnboundedSender<IndexJob>>,
     pub cache: Arc<Cache<String, CachedResponse>>,
     pub cookie_key: Key,
 }
@@ -41,7 +47,7 @@ pub async fn create_app_state(
         .time_to_live(Duration::from_secs(CACHE_TTL_SECONDS))
         .build();
 
-    let search_service = if config.enable_full_text_search {
+    let (search_service, index_tx) = if config.enable_full_text_search {
         match SearchService::new(&config.search_index_dir) {
             Ok(service) => {
                 let mut all = article_store.load_full_articles();
@@ -52,19 +58,44 @@ pub async fn create_app_state(
                 all.extend(notes);
                 if let Err(e) = service.index_articles(&all, config.search_index_heap_size) {
                     tracing::warn!("Failed to index articles: {:?}", e);
-                    None
+                    (None, None)
                 } else {
                     info!("Search index updated successfully!");
-                    Some(Arc::new(service))
+                    let service = Arc::new(service);
+                    let (tx, mut rx) = mpsc::unbounded_channel();
+                    let search = Arc::clone(&service);
+                    let heap_size = config.search_index_heap_size;
+                    tokio::spawn(async move {
+                        let mut to_index = Vec::new();
+                        let mut to_remove = Vec::new();
+                        while let Some(job) = rx.recv().await {
+                            match job {
+                                IndexJob::Index(a) => to_index.push(a),
+                                IndexJob::Remove(s) => to_remove.push(s),
+                            }
+                            while let Ok(job) = rx.try_recv() {
+                                match job {
+                                    IndexJob::Index(a) => to_index.push(a),
+                                    IndexJob::Remove(s) => to_remove.push(s),
+                                }
+                            }
+                            if let Err(e) = search.apply_batch(&to_index, &to_remove, heap_size) {
+                                tracing::warn!("Failed to process search index batch: {:?}", e);
+                            }
+                            to_index.clear();
+                            to_remove.clear();
+                        }
+                    });
+                    (Some(service), Some(tx))
                 }
             }
             Err(e) => {
                 tracing::warn!("Failed to initialize search service: {:?}", e);
-                None
+                (None, None)
             }
         }
     } else {
-        None
+        (None, None)
     };
 
     let cookie_secret =
@@ -76,6 +107,7 @@ pub async fn create_app_state(
         note_store: Arc::new(RwLock::new(note_store)),
         config: Arc::clone(config),
         search_service,
+        index_tx,
         cache: Arc::new(cache),
         cookie_key,
     }))
@@ -127,12 +159,8 @@ async fn log_errors(req: Request<Body>, next: Next) -> Response {
     res
 }
 
-async fn watch_directory<F>(
-    dir: &'static str,
-    state: Arc<AppState>,
-    store_ref: F,
-    is_notes: bool,
-) where
+async fn watch_directory<F>(dir: &'static str, state: Arc<AppState>, store_ref: F, is_notes: bool)
+where
     F: Fn(&AppState) -> &RwLock<ArticleStore> + Send + Sync + 'static,
 {
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -162,7 +190,11 @@ async fn watch_directory<F>(
 
     info!("Hot reloading enable for '{}'", dir);
 
-    let nested_categories = if is_notes { true } else { ENABLE_NESTED_CATEGORIES };
+    let nested_categories = if is_notes {
+        true
+    } else {
+        ENABLE_NESTED_CATEGORIES
+    };
     let prefix = if is_notes { "notes/" } else { "" };
     let entity = if is_notes { "note" } else { "article" };
     let entity_plural = if is_notes { "Notes" } else { "Articles" };
@@ -189,8 +221,9 @@ async fn watch_directory<F>(
         let mut removed_map = HashMap::new();
         for change in &changes {
             if matches!(change.change_type, FileChange::Removed) {
-                if let Some(article) =
-                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX).next()
+                if let Some(article) = store_guard
+                    .query(|a| a.file_path == change.path, 0, usize::MAX)
+                    .next()
                 {
                     let slug = if is_notes {
                         format!("{}{}", prefix, article.slug_with_category())
@@ -204,18 +237,22 @@ async fn watch_directory<F>(
 
         match store_guard.incremental_update(dir, nested_categories) {
             Ok(true) => {
-                if let Some(search_service) = &state.search_service {
+                if let Some(tx) = &state.index_tx {
                     for change in &changes {
                         match change.change_type {
                             FileChange::Added | FileChange::Modified => {
-                                if let Some(article) =
-                                    store_guard.query(|a| a.file_path == change.path, 0, usize::MAX)
-                                        .next()
+                                if let Some(article) = store_guard
+                                    .query(|a| a.file_path == change.path, 0, usize::MAX)
+                                    .next()
                                 {
                                     match store_guard.load_content_for(article) {
                                         Ok(content) => {
                                             let slug = if is_notes {
-                                                format!("{}{}", prefix, article.slug_with_category())
+                                                format!(
+                                                    "{}{}",
+                                                    prefix,
+                                                    article.slug_with_category()
+                                                )
                                             } else {
                                                 article.slug.clone()
                                             };
@@ -224,17 +261,7 @@ async fn watch_directory<F>(
                                                 metadata: article.metadata.clone(),
                                                 content,
                                             };
-                                            if let Err(e) = search_service.index_article(
-                                                &article_content,
-                                                state.config.search_index_heap_size,
-                                            ) {
-                                                tracing::warn!(
-                                                    "Failed to index {} {}: {:?}",
-                                                    entity,
-                                                    article.slug,
-                                                    e
-                                                );
-                                            }
+                                            let _ = tx.send(IndexJob::Index(article_content));
                                         }
                                         Err(e) => {
                                             tracing::warn!(
@@ -249,16 +276,7 @@ async fn watch_directory<F>(
                             }
                             FileChange::Removed => {
                                 if let Some(slug) = removed_map.get(&change.path) {
-                                    if let Err(e) = search_service
-                                        .remove_article(slug, state.config.search_index_heap_size)
-                                    {
-                                        tracing::warn!(
-                                            "Failed to remove {} {}: {:?}",
-                                            entity,
-                                            slug,
-                                            e
-                                        );
-                                    }
+                                    let _ = tx.send(IndexJob::Remove(slug.clone()));
                                 }
                             }
                         }

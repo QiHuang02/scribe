@@ -177,6 +177,42 @@ impl SearchService {
         Ok(())
     }
 
+    pub fn apply_batch(
+        &self,
+        to_index: &[ArticleContent],
+        to_remove: &[String],
+        heap_size: usize,
+    ) -> Result<(), SearchError> {
+        let mut index_writer = self.index.writer(heap_size)?;
+
+        for slug in to_remove {
+            let term = Term::from_field_text(self.slug_field, slug);
+            index_writer.delete_term(term);
+        }
+
+        for article in to_index {
+            if !article.metadata.draft {
+                let tags_text = article.metadata.tags.join(" ");
+                let category_text = article.metadata.category.as_deref().unwrap_or("");
+
+                let doc = doc!(
+                    self.slug_field => article.slug.clone(),
+                    self.title_field => article.metadata.title.clone(),
+                    self.content_field => article.content.clone(),
+                    self.description_field => article.metadata.description.clone(),
+                    self.tags_field => tags_text,
+                    self.category_field => category_text,
+                );
+
+                index_writer.add_document(doc)?;
+            }
+        }
+
+        index_writer.commit()?;
+        self.reader.reload()?;
+        Ok(())
+    }
+
     pub async fn search(
         &self,
         query_text: &str,

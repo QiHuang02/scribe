@@ -1,10 +1,11 @@
 use crate::handlers::error::{AppError, ERR_EMPTY_SEARCH_QUERY, ERR_FULLTEXT_DISABLED};
-use crate::server::app::AppState;
+use crate::server::app::{AppState, reindex_all_content};
+use crate::server::auth::require_admin;
 use crate::services::search::SearchResult;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
-use axum::routing::get;
-use axum::{Json, Router};
+use axum::routing::{get, post};
+use axum::{Json, Router, middleware};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -37,6 +38,10 @@ pub fn create_router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/search", get(search_articles))
         .route("/api/search/popular", get(get_popular_searches))
+        .route(
+            "/api/search/reindex",
+            post(trigger_reindex).route_layer(middleware::from_fn(require_admin)),
+        )
 }
 
 async fn search_articles(
@@ -81,11 +86,7 @@ async fn search_articles(
                     .query(
                         |article| {
                             !article.metadata.draft
-                                && (article
-                                    .metadata
-                                    .title
-                                    .to_lowercase()
-                                    .contains(&query_lower)
+                                && (article.metadata.title.to_lowercase().contains(&query_lower)
                                     || article
                                         .metadata
                                         .description
@@ -111,11 +112,7 @@ async fn search_articles(
                     .query(
                         |note| {
                             !note.metadata.draft
-                                && (note
-                                    .metadata
-                                    .title
-                                    .to_lowercase()
-                                    .contains(&query_lower)
+                                && (note.metadata.title.to_lowercase().contains(&query_lower)
                                     || note
                                         .metadata
                                         .description
@@ -170,4 +167,11 @@ async fn get_popular_searches(
         .collect();
 
     Ok(Json(PopularSearchResponse { searches }))
+}
+
+async fn trigger_reindex(
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, AppError> {
+    reindex_all_content(&state).await;
+    Ok(Json(serde_json::json!({ "message": "Reindex completed" })))
 }
