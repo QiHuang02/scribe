@@ -64,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import { getToken } from '../utils/storage'
@@ -85,8 +85,23 @@ const rules = {
 }
 
 const isPreview = ref(false)
-const previewHTML = computed(() =>
-  DOMPurify.sanitize(md.render(form.value.content || ''))
+const previewHTML = ref('')
+
+function updatePreview() {
+  previewHTML.value = DOMPurify.sanitize(
+    md.render(form.value.content || '')
+  )
+}
+
+// Simple debounce implementation
+let updateTimer
+watch(
+  () => form.value.content,
+  () => {
+    clearTimeout(updateTimer)
+    updateTimer = setTimeout(updatePreview, 300)
+  },
+  { immediate: true }
 )
 
 const tagOptions = ref([])
