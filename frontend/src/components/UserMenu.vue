@@ -30,11 +30,14 @@
           <div class="dropdown-divider"></div>
 
           <div class="dropdown-items">
-            <div v-if="isAuthor" class="dropdown-item">
-              <router-link to="/articles/new" class="dropdown-link">
-                ✏️ 写文章
-              </router-link>
-            </div>
+            <Suspense v-if="isAuthor && authorMenuComponent">
+              <template #default>
+                <component :is="authorMenuComponent" />
+              </template>
+              <template #fallback>
+                <div class="dropdown-item">加载中...</div>
+              </template>
+            </Suspense>
 
             <div class="dropdown-item">
               <a
@@ -61,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useMainStore } from '../store'
 import useAuth from '../composables/useAuth'
 
@@ -72,7 +75,19 @@ const showDropdown = ref(false)
 const dropdownRef = ref(null)
 
 const user = currentUser
-const roleClass = computed(() => isAuthor.value ? 'author' : 'visitor')
+const roleClass = computed(() => (isAuthor.value ? 'author' : 'visitor'))
+
+// Lazily loaded author-specific menu component
+const authorMenuComponent = ref(null)
+watch(
+  isAuthor,
+  async (val) => {
+    if (val && !authorMenuComponent.value) {
+      authorMenuComponent.value = (await import('./AuthorMenu.vue')).default
+    }
+  },
+  { immediate: true }
+)
 
 const toggleDropdown = () => {
   showDropdown.value = !showDropdown.value
@@ -152,6 +167,10 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 500;
   color: #2d3748;
+}
+
+a.user-name {
+  text-decoration: none;
 }
 
 .dropdown-arrow {
